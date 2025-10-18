@@ -1,0 +1,23 @@
+# AgentForge Pro Dependencies
+
+# Core ML frameworks
+torch>=2.0.0
+transformers>=4.30.0
+accelerate>=0.20.0
+
+# LangChain
+langchain>=0.1.0
+langchain-core>=0.1.0
+langchain-huggingface>=0.0.1
+
+# UI
+gradio>=4.0.0
+
+# Utilities
+numpy>=1.24.0
+
+# Optional: For advanced RAG with vector embeddings (future enhancement)
+# sentence-transformers>=2.2.0
+# faiss-cpu>=1.7.4  # or faiss-gpu for GPU support
+# chromadb>=0.4.0
+

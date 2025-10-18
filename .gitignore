@@ -1,0 +1,6 @@
+src/__pycache__/
+QUICK_START.md
+CHANGELOG.md
+PROJECT_SUMMARY.md
+history/.gitignore
+custom_agents/.gitignore
