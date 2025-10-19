@@ -285,9 +285,6 @@ AgentForge is designed to be extended. Future enhancements could include:
 
 ## 📝 License
 
-MIT License - Free to use and modify
-Creator: Abaryan
-
 ## Credits
 
 Built on:
@@ -296,5 +293,13 @@ Built on:
 - **Hugging Face Transformers**: Model inference
 - **CyberXP**: Original inspiration for multi-agent system
 
+Citation
+If you use this work, please cite:
+
+@software{AgentForge,
+  title={🔨 AgentForge Pro - Universal Multi-Agent Manager},
+  author={Abaryan},
+  year={2025}
+}
 ---
 
