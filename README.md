@@ -296,10 +296,13 @@ Built on:
 Citation
 If you use this work, please cite:
 
+```bibtex
+
 @software{AgentForge,
   title={🔨 AgentForge Pro - Universal Multi-Agent Manager},
   author={Abaryan},
   year={2025}
 }
 ---
+```
 
