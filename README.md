@@ -2,7 +2,7 @@
 <img width="2878" height="1642" alt="Screenshot 2025-10-18 201311" src="https://github.com/user-attachments/assets/845e5652-0c60-4ecc-90d4-4871c12915f7" />
 
 
-Create, manage, and orchestrate multiple AI agents for **any purpose** with advanced features and professional workflows.
+Create, manage, and orchestrate specialized AI agents for any purpose. Model-agnostic platform with professional workflows and advanced features.
 
 ## Key Features
 
@@ -30,25 +30,26 @@ Create, manage, and orchestrate multiple AI agents for **any purpose** with adva
 - **Complete Import/Export** system for agents
 - **Enhanced UI** with 6 specialized tabs
 
-##  Quick Start
+- Agent template system with 20+ professional templates
+- Agent chaining with 3 execution modes
+- RAG (Retrieval Augmented Generation) for knowledge base
+- Full agent editing and management interface
+- Conversation history with automatic logging
+- Usage statistics and analytics dashboard
+- Complete import/export system (JSON/ZIP)
+- Enhanced UI with smooth loading animations
 
-### 1. Install Dependencies
+## Quick Start
 
 ```bash
+# 1. Install dependencies
 pip install -r requirements.txt
 ```
 
-### 2. Configure Model
+# 2. Configure model (optional - edit agent_forge_app.py)
+DEFAULT_MODEL = "meta-llama/Llama-2-7b-chat-hf"
 
-Edit `agent_forge_app.py` and change the model:
-
-```python
-DEFAULT_MODEL = "meta-llama/Llama-2-7b-chat-hf"  # Change to your preferred model
-```
-
-### 3. Run the App
-
-```bash
+# 3. Run
 python agent_forge_app.py
 ```
 
@@ -74,13 +75,6 @@ Open `http://localhost:7870` in your browser.
    - **System Prompt**: Define behavior, focus areas, output style
 3. Click **"Create Agent"**
 
-### Editing Agents  NEW
-
-1. Go to **"Manage Agents"** tab → **"Edit Agent"** sub-tab
-2. Select agent from dropdown
-3. Click **"Load Agent"**
-4. Modify name, role, or system prompt
-5. Click **"Update Agent"**
 
 ### Running Agents
 
@@ -105,6 +99,9 @@ Open `http://localhost:7870` in your browser.
 6. View step-by-step results
 
 ### Managing Agents
+- **Edit**: Manage Agents tab → Edit sub-tab → Select → Load → Modify → Update
+- **Delete**: Manage Agents tab → Delete sub-tab → Select → Delete
+- **Export/Import**: Manage Agents tab → Import/Export sub-tab → Export single/all or Import from file
 
 1. Go to **"Manage Agents"** tab
 2. **Edit**: Modify existing agents
@@ -114,135 +111,31 @@ Open `http://localhost:7870` in your browser.
 
 ## Example Use Cases
 
-### Creative Writing
-Create agents for:
-- Short Story Writer
-- Poet
-- Screenplay Writer
-- Blog Post Writer
+All templates are built-in and ready to use.
 
-### Software Development
-Create agents for:
-- Code Reviewer
-- Bug Finder
-- Documentation Writer
-- Refactoring Expert
+## Configuration
 
-### Business
-Create agents for:
-- Marketing Copywriter
-- Product Analyst
-- Customer Support
-- Email Responder
+**Models**: Compatible with any Hugging Face model (Llama, Mistral, Falcon, etc.)  
+**Storage**: Customizable directories for agents, history, and knowledge base  
+**Workflows**: Chain multiple agents for complex pipelines (Content Creation, Software QA, Research, etc.)
 
-### Education
-Create agents for:
-- Tutor (Math)
-- Tutor (Science)
-- Essay Grader
-- Study Guide Creator
-
-##  Agent Examples
-
-### Example 1: Creative Writer
-
-```
-Name: Creative Writer
-Role: Expert in creative storytelling
-Prompt:
-You are an expert creative writer specializing in short stories.
-
-Focus on:
-- Compelling character development
-- Unexpected plot twists
-- Vivid, sensory descriptions
-- Emotional resonance
-
-Provide engaging, well-structured stories with a clear beginning, middle, and end.
-```
-
-### Example 2: Code Reviewer
-
-```
-Name: Code Reviewer
-Role: Expert in code quality and best practices
-Prompt:
-You are a senior software engineer reviewing code.
-
-Focus on:
-- Code quality and readability
-- Security vulnerabilities
-- Performance issues
-- Best practices and patterns
-
-Provide constructive feedback with specific suggestions for improvement.
-```
-
-### Example 3: Data Analyst
-
-```
-Name: Data Analyst
-Role: Expert in data interpretation and insights
-Prompt:
-You are a data analyst specializing in business intelligence.
-
-Focus on:
-- Identifying patterns and trends
-- Providing actionable insights
-- Clear, data-driven recommendations
-- Visual descriptions (when applicable)
-
-Analyze data thoroughly and provide clear, business-focused conclusions.
-```
-
-## 🔧 Advanced Configuration
-
-### Using Different Models
-
-AgentForge works with any Hugging Face model. Popular choices:
-
-- `meta-llama/Llama-2-7b-chat-hf`
-- `mistralai/Mistral-7B-Instruct-v0.1`
-- `tiiuae/falcon-7b-instruct`
-- `google/flan-t5-xl`
-
-### Custom Storage Location
-
-Change the storage directory in `agent_forge_app.py`:
-
-```python
-agent_manager = AgentManager(storage_dir="my_custom_agents")
-```
-
-### Multi-Agent Workflows
-
-Combine agents for comprehensive analysis:
-- **Content Creation**: Idea Generator + Writer + Editor
-- **Software QA**: Bug Finder + Security Auditor + Performance Analyst
-- **Research**: Data Gatherer + Analyst + Report Writer
-
-## 📁 Project Structure
+## Project Structure
 
 ```
 AgentForge/
 ├── agent_forge_app.py       # Main Gradio application (v2.0)
 ├── src/
 │   ├── base_agent.py        # Abstract base class
-│   ├── custom_agent.py      # Custom agent implementation
-│   ├── agent_manager.py     # Agent storage/retrieval + import/export
-│   ├── agent_templates.py   # 20+ pre-built templates  NEW
-│   ├── agent_chain.py       # Sequential execution system  NEW
-│   ├── history_manager.py   # Conversation logging  NEW
-│   └── rag_integration.py   # Knowledge base retrieval  NEW
-├── custom_agents/           # Saved agents (JSON)
-├── history/                 # Conversation logs  NEW
-├── knowledge_base/          # RAG documents  NEW
-├── docs/                    # Documentation
-├── requirements.txt         # Python dependencies
-├── README.md               # This file
-├── FEATURES.md             # Complete feature guide  NEW
-├── QUICK_START.md          # Getting started guide
-└── PROJECT_SUMMARY.md      # Project overview
+│   ├── custom_agent.py      # Agent implementation
+│   ├── agent_manager.py     # CRUD operations + import/export
+│   ├── agent_templates.py   # 20+ pre-built templates
+│   ├── agent_chain.py       # Sequential execution
+│   ├── history_manager.py   # Conversation logging
+│   └── rag_integration.py   # Knowledge base retrieval
+├── custom_agents/           # Agent storage (JSON)
+├── history/                 # Conversation logs
+├── knowledge_base/          # RAG documents
+└── requirements.txt         # Dependencies
 ```
 
 ##  Safety & Validation
@@ -301,8 +194,12 @@ If you use this work, please cite:
 @software{AgentForge,
   title={🔨 AgentForge Pro - Universal Multi-Agent Manager},
   author={Abaryan},
-  year={2025}
+  year={2025},
+  url={https://github.com/abaryan/AgentForge}
 }
----
 ```
+
+## Acknowledgments
+
+Built with [Gradio](https://gradio.app/), [LangChain](https://www.langchain.com/), and [Hugging Face Transformers](https://huggingface.co/transformers/). Inspired by the multi-agent architecture of [CyberXP](https://github.com/abaryan/CyberXP).
 

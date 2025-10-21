@@ -126,35 +126,46 @@ Your role: {self.role}
             }
         
         try:
-            # Build prompt using LangChain (similar to CyberXP approach)
+            # Build robust prompt with clear structure
             from langchain_core.prompts import ChatPromptTemplate
             from langchain_core.output_parsers import StrOutputParser
             
-            # Simple, clean system prompt
-            system_prompt = self._system_prompt
+            # Create well-structured system prompt
+            # Keep it simple and direct to avoid breaking model output
+            system_prompt = self._system_prompt.strip()
             
-            # Build user message
+            # Build clear user message
             if context.strip():
                 user_message = f"{input_text}\n\nContext: {context.strip()}"
             else:
-                user_message = input_text
+                user_message = input_text.strip()
             
-            # Build prompt template
+            # Use simple, reliable prompt template
+            # Avoid complex formatting that might confuse the model
             prompt = ChatPromptTemplate.from_messages([
                 ("system", system_prompt),
                 ("human", user_message)
             ])
             
-            # Create chain
+            # Create chain with output parser
             chain = prompt | self.llm | StrOutputParser()
             
-            # Invoke chain
+            # Invoke chain with empty dict (all variables in template)
             response = chain.invoke({})
+            
+            # Clean response: remove common artifacts
+            response_clean = response.strip()
+            
+            # Remove any accidental prompt echoes at start
+            if response_clean.startswith(("System:", "Human:", "Assistant:")):
+                lines = response_clean.split('\n', 1)
+                if len(lines) > 1:
+                    response_clean = lines[1].strip()
             
             return {
                 "agent": self.name,
                 "role": self.role,
-                "response": response.strip(),
+                "response": response_clean,
                 "success": True
             }
             
