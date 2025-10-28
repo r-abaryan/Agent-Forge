@@ -54,6 +54,7 @@ python agent_forge_app.py
 ```
 
 Open `http://localhost:7870` in your browser.
+```
 
 ## 📖 Usage Guide
 
@@ -123,11 +124,11 @@ All templates are built-in and ready to use.
 
 ```
 AgentForge/
-├── agent_forge_app.py       # Main Gradio application (v2.0)
+├── agent_forge_app.py       # Main Gradio application
 ├── src/
 │   ├── base_agent.py        # Abstract base class
 │   ├── custom_agent.py      # Agent implementation
-│   ├── agent_manager.py     # CRUD operations + import/export
+│   ├── agent_manager.py     # CRUD & import/export
 │   ├── agent_templates.py   # 20+ pre-built templates
 │   ├── agent_chain.py       # Sequential execution
 │   ├── history_manager.py   # Conversation logging
