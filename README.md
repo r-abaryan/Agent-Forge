@@ -1,50 +1,30 @@
 # 🔨 AgentForge Pro - Universal Multi-Agent Manager
 <img width="2878" height="1642" alt="Screenshot 2025-10-18 201311" src="https://github.com/user-attachments/assets/845e5652-0c60-4ecc-90d4-4871c12915f7" />
 
+![Python](https://img.shields.io/badge/Python-3.8+-blue.svg)
+![PyTorch](https://img.shields.io/badge/PyTorch-2.0+-red.svg)
+![License](https://img.shields.io/badge/License-MIT-green.svg)
 
 Create, manage, and orchestrate specialized AI agents for any purpose. Model-agnostic platform with professional workflows and advanced features.
 
 ## Key Features
 
-### Core Capabilities
-- **Create Unlimited Agents**: Build as many specialized agents as you need
-- **20+ Professional Templates**: Quick-start with pre-built expert agents
-- **Full Agent Editing**: Modify any agent anytime with built-in editor
-- **Multi-Agent Execution**: Run multiple agents simultaneously for diverse perspectives
-- **Agent Chaining**: Sequential execution with data passing (3 modes)
+- **Unlimited Agents**: Create as many specialized agents as needed
+- **20+ Professional Templates**: Pre-built expert agents across 7 categories
+- **Agent Chaining**: Sequential execution with 3 modes (cumulative, sequential, parallel)
 - **RAG Integration**: Knowledge-enhanced responses with document retrieval
-- **Conversation History**: Automatic logging of all agent interactions
-- **Usage Analytics**: Track performance and agent utilization
-- **Import/Export**: Share agents and create backups
-- **Visual Output**: Color-coded responses from each agent
-- **Any Domain**: Works for creative writing, code review, data analysis, customer support, etc.
-- **Model Agnostic**: Use any Hugging Face language model
-
-###  New in v2.0
-- **Agent Templates System** with 20+ professional templates
-- **Agent Chaining** with cumulative, sequential, and parallel modes
-- **RAG (Retrieval Augmented Generation)** for knowledge-enhanced responses
-- **Full Agent Editing** capabilities in management interface
-- **Conversation History** with automatic logging
-- **Usage Statistics** and analytics dashboard
-- **Complete Import/Export** system for agents
-- **Enhanced UI** with 6 specialized tabs
-
-- Agent template system with 20+ professional templates
-- Agent chaining with 3 execution modes
-- RAG (Retrieval Augmented Generation) for knowledge base
-- Full agent editing and management interface
-- Conversation history with automatic logging
-- Usage statistics and analytics dashboard
-- Complete import/export system (JSON/ZIP)
-- Enhanced UI with smooth loading animations
+- **Multi-Agent Execution**: Run multiple agents simultaneously
+- **Full Agent Editing**: Modify agents anytime with built-in editor
+- **Conversation History**: Automatic logging of all interactions
+- **Usage Analytics**: Track performance and utilization
+- **Import/Export**: Share agents and create backups (JSON/ZIP)
+- **Model Agnostic**: Compatible with any Hugging Face language model
 
 ## Quick Start
 
 ```bash
 # 1. Install dependencies
 pip install -r requirements.txt
-```
 
 # 2. Configure model (optional - edit agent_forge_app.py)
 DEFAULT_MODEL = "meta-llama/Llama-2-7b-chat-hf"
@@ -54,71 +34,44 @@ python agent_forge_app.py
 ```
 
 Open `http://localhost:7870` in your browser.
-```
 
 ## 📖 Usage Guide
 
 ### Creating Agents
 
-#### Option 1: Use Templates (Recommended)
+**Option 1: Use Templates (Recommended)**
 1. Go to **"Create Agent"** tab
-2. Select a category (Content Creation, Software Development, etc.)
-3. Choose a template from the dropdown
-4. Click **"Load Template"**
-5. Customize if needed
-6. Click **"Create Agent"**
+2. Select category → Choose template → Click **"Load Template"**
+3. Customize if needed → Click **"Create Agent"**
 
-#### Option 2: Create from Scratch
+**Option 2: Create from Scratch**
 1. Go to **"Create Agent"** tab
-2. Fill in:
-   - **Agent Name**: Descriptive name (e.g., "Creative Writer", "Code Reviewer")
-   - **Role**: Brief description of expertise
-   - **System Prompt**: Define behavior, focus areas, output style
+2. Fill in Agent Name, Role, and System Prompt
 3. Click **"Create Agent"**
-
 
 ### Running Agents
 
-#### Standard Execution
+**Standard Execution**
 1. Go to **"Run Agents"** tab
-2. Enter your input text
-3. (Optional) Add context for better understanding
-4. (Optional) Enable **"Use Knowledge Base (RAG)"** for enhanced responses
-5. Select one or more agents from the dropdown
-6. Click **"Run Selected Agents"**
-7. View results in Visual or Raw Text tabs
+2. Enter input text (optional: add context, enable RAG)
+3. Select one or more agents → Click **"Run Selected Agents"**
 
-#### Agent Chaining  NEW
+**Agent Chaining**
 1. Go to **"Agent Chains"** tab
-2. Enter your input text
-3. Select 2+ agents in desired order
-4. Choose chain mode:
-   - **Cumulative**: Each agent sees all previous outputs
-   - **Sequential**: Each agent only sees previous output
-   - **Parallel**: No chaining (comparison mode)
-5. Click **"Run Chain"**
-6. View step-by-step results
+2. Enter input → Select 2+ agents in order
+3. Choose mode: **Cumulative** (all previous outputs), **Sequential** (previous output only), or **Parallel** (comparison)
+4. Click **"Run Chain"**
 
 ### Managing Agents
-- **Edit**: Manage Agents tab → Edit sub-tab → Select → Load → Modify → Update
-- **Delete**: Manage Agents tab → Delete sub-tab → Select → Delete
-- **Export/Import**: Manage Agents tab → Import/Export sub-tab → Export single/all or Import from file
-
-1. Go to **"Manage Agents"** tab
-2. **Edit**: Modify existing agents
-3. **View All**: See complete agent list
-4. **Delete**: Remove agents permanently
-5. **Import/Export**: Share agents or create backups
-
-## Example Use Cases
-
-All templates are built-in and ready to use.
+- **Edit**: Manage Agents → Edit → Select → Load → Modify → Update
+- **Delete**: Manage Agents → Delete → Select → Delete
+- **Import/Export**: Manage Agents → Import/Export → Export/Import files
 
 ## Configuration
 
-**Models**: Compatible with any Hugging Face model (Llama, Mistral, Falcon, etc.)  
+**Models**: Any Hugging Face model (Llama, Mistral, Falcon, etc.)  
 **Storage**: Customizable directories for agents, history, and knowledge base  
-**Workflows**: Chain multiple agents for complex pipelines (Content Creation, Software QA, Research, etc.)
+**Workflows**: Chain agents for complex pipelines (Content Creation, Software QA, Research, etc.)
 
 ## Project Structure
 
@@ -139,43 +92,15 @@ AgentForge/
 └── requirements.txt         # Dependencies
 ```
 
-##  Safety & Validation
+## Safety & Validation
 
-- **Input Validation**: All agent names and prompts are validated
+- **Input Validation**: All agent names and prompts validated
 - **Dangerous Pattern Detection**: Blocks script tags, eval, exec
 - **Length Limits**: Max 100 chars (name), 200 chars (role), 4000 chars (prompt)
 - **Local Storage**: All agents stored locally in `custom_agents/`
 
-## 🆕 What's New in v2.0
 
-### Major Features Added
--  **Agent Templates**: 20+ professional templates across 7 categories
--  **Agent Chaining**: Sequential execution with 3 modes
--  **RAG Integration**: Knowledge-enhanced responses
--  **Full Agent Editing**: Modify agents anytime
--  **Conversation History**: Automatic logging system
--  **Usage Analytics**: Performance metrics dashboard
--  **Import/Export**: Complete agent sharing system
--  **Enhanced UI**: 6 specialized tabs
-
-### Improvements
-- Better error handling and validation
-- Atomic file operations for data safety
-- Color-coded visual outputs
-- Responsive UI with better organization
-- Comprehensive documentation
-
-
-## 🤝 Contributing
-
-AgentForge is designed to be extended. Future enhancements could include:
--  Streaming responses (real-time output)
--  Agent versioning system
--  Vector embeddings for advanced RAG
--  Agent collaboration (agents calling agents)
--  Custom output formatters (JSON, Markdown, HTML)
--  REST API mode
--  Batch processing capabilities
+Future enhancements could include: streaming responses, agent versioning, vector embeddings for advanced RAG, agent collaboration, custom output formatters, REST API mode, and batch processing.
 
 ## 📝 License
 
@@ -203,4 +128,3 @@ If you use this work, please cite:
 ## Acknowledgments
 
 Built with [Gradio](https://gradio.app/), [LangChain](https://www.langchain.com/), and [Hugging Face Transformers](https://huggingface.co/transformers/). Inspired by the multi-agent architecture of [CyberXP](https://github.com/abaryan/CyberXP).
-
