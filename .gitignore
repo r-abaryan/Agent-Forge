@@ -5,4 +5,9 @@ PROJECT_SUMMARY.md
 history/.gitignore
 custom_agents/.gitignore
 docs
-orchestration/
+orchestration/README_ORCHESTRATION.md
+orchestration/USAGE_GUIDE.md
+orchestration/USAGE_WORKFLOW.md
+orchestration/__pycache__
+orchestration/test_workflow.py
+orchestration/example_workflow_execution.py
