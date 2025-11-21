@@ -22,6 +22,11 @@ from src.history_manager import HistoryManager
 from src.agent_chain import AgentChain, WorkflowPresets
 from src.rag_integration import SimpleRAG
 
+# Orchestration imports
+import json
+from orchestration.workflow_executor import WorkflowExecutor
+from orchestration.orchestration_parser import OrchestrationParser
+
 # Configuration
 DEFAULT_MODEL = "abaryan/CyberXP_Agent_Llama_3.2_1B"
 
@@ -31,6 +36,7 @@ agent_manager = None
 history_manager = None
 agent_chain = None
 rag_system = None
+workflow_executor = None
 
 
 def initialize(model_path: str = DEFAULT_MODEL):
@@ -71,6 +77,10 @@ def initialize(model_path: str = DEFAULT_MODEL):
     history_manager = HistoryManager(history_dir="history")
     agent_chain = AgentChain(agent_manager, llm)
     rag_system = SimpleRAG(knowledge_base_dir="knowledge_base")
+    
+    # Initialize workflow executor (needs agent_manager and llm)
+    global workflow_executor
+    workflow_executor = WorkflowExecutor(agent_manager, llm, auto_create_agents=True)
     
     print("Initialization complete!")
 
@@ -491,6 +501,175 @@ def get_kb_stats() -> str:
             parts.append(f"- **{doc['title']}** ({doc['type']}) - {doc['content_length']} chars")
     
     return "\n".join(parts)
+
+
+# ============================================================================
+# CANVAS WORKFLOW EXECUTION
+# ============================================================================
+
+def parse_workflow_json(workflow_json_str: str) -> Tuple[str, Dict[str, Any]]:
+    """
+    Parse and validate canvas workflow JSON.
+    
+    Args:
+        workflow_json_str: JSON string of canvas workflow
+        
+    Returns:
+        Tuple of (status_message, parsed_workflow_dict)
+    """
+    try:
+        if not workflow_json_str or not workflow_json_str.strip():
+            return "⚠️ Please provide workflow JSON", None
+        
+        # Parse JSON
+        workflow_json = json.loads(workflow_json_str)
+        
+        # Parse workflow
+        parser = OrchestrationParser()
+        parsed_workflow = parser.parse_workflow(workflow_json)
+        
+        # Validate
+        is_valid, errors = parser.validate_workflow(parsed_workflow)
+        if not is_valid:
+            return f"❌ Workflow validation failed: {', '.join(errors)}", None
+        
+        # Build info message
+        info_parts = [
+            f"✅ **Workflow Parsed Successfully!**\n",
+            f"**Name:** {parsed_workflow['name']}",
+            f"**Version:** {parsed_workflow.get('version', 'N/A')}",
+            f"**Agents:** {len(parsed_workflow['agent_sequence'])}",
+            f"**Nodes:** {parsed_workflow['metadata']['node_count']}",
+            f"\n### Agent Sequence:",
+        ]
+        
+        for idx, agent_config in enumerate(parsed_workflow['agent_sequence'], 1):
+            info_parts.append(f"{idx}. **{agent_config['name']}** - {agent_config['role']}")
+        
+        if parsed_workflow.get('notes'):
+            info_parts.append(f"\n### Notes:\n{parsed_workflow['notes']}")
+        
+        return "\n".join(info_parts), parsed_workflow
+        
+    except json.JSONDecodeError as e:
+        return f"❌ Invalid JSON: {str(e)}", None
+    except Exception as e:
+        return f"❌ Error parsing workflow: {str(e)}", None
+
+
+def execute_workflow_handler(
+    workflow_json_str: str,
+    input_text: str,
+    context: str,
+    pass_mode: str
+) -> Tuple[str, str]:
+    """
+    Execute a canvas workflow.
+    
+    Args:
+        workflow_json_str: JSON string of canvas workflow
+        input_text: Initial input text
+        context: Additional context
+        pass_mode: Data passing mode
+        
+    Returns:
+        Tuple of (text_output, html_output)
+    """
+    try:
+        if not workflow_json_str or not workflow_json_str.strip():
+            return "⚠️ Please provide workflow JSON", ""
+        
+        if not input_text or not input_text.strip():
+            return "⚠️ Please provide input text", ""
+        
+        # Parse JSON
+        workflow_json = json.loads(workflow_json_str)
+        
+        # Execute workflow
+        result = workflow_executor.execute_workflow(
+            canvas_json=workflow_json,
+            initial_input=input_text.strip(),
+            context=context.strip() if context else "",
+            pass_mode=pass_mode
+        )
+        
+        if not result.get("success"):
+            error_msg = result.get("error", "Unknown error")
+            return f"❌ Workflow execution failed: {error_msg}", ""
+        
+        # Build text output
+        text_parts = [
+            f"# Workflow: {result['workflow_name']}\n",
+            f"**Status:** ✅ Success",
+            f"**Steps:** {result['successful_steps']}/{result['total_steps']}\n",
+            "---\n"
+        ]
+        
+        for step_result in result.get("results", []):
+            agent = step_result.get("agent", "Unknown")
+            role = step_result.get("role", "")
+            response = step_result.get("response", "")
+            success = step_result.get("success", False)
+            step_num = step_result.get("step", 0)
+            
+            status = "✅" if success else "❌"
+            text_parts.append(f"## {status} Step {step_num}: {agent}")
+            if role:
+                text_parts.append(f"**Role:** {role}\n")
+            text_parts.append(f"{response}\n")
+            text_parts.append("---\n")
+        
+        text_parts.append(f"\n### Final Output:\n{result.get('final_output', '')}")
+        
+        # Build HTML output
+        html_output = "<div style='padding: 20px; background: #1a1f26; color: #e6edf3;'>"
+        html_output += f"<h1 style='color: #8ab4f8; margin-bottom: 20px;'>🎯 {result['workflow_name']}</h1>"
+        html_output += f"<p><strong>Status:</strong> ✅ Success | <strong>Steps:</strong> {result['successful_steps']}/{result['total_steps']}</p>"
+        html_output += "<hr style='border-color: #30363d; margin: 20px 0;'>"
+        
+        colors = ["#8ab4f8", "#ffa500", "#50fa7b", "#ff79c6", "#bd93f9"]
+        
+        for idx, step_result in enumerate(result.get("results", [])):
+            agent = step_result.get("agent", "Unknown")
+            role = step_result.get("role", "")
+            response = step_result.get("response", "")
+            success = step_result.get("success", False)
+            step_num = step_result.get("step", 0)
+            
+            border_color = colors[idx % len(colors)]
+            status_icon = "✅" if success else "❌"
+            
+            html_output += f"""
+            <div style='margin-bottom: 30px; border-left: 5px solid {border_color}; padding: 20px; background: #0d1117; border-radius: 8px;'>
+                <h2 style='color: {border_color}; margin-bottom: 10px;'>{status_icon} Step {step_num}: {agent}</h2>
+                {f'<p style="color: #9aa4ad; margin-bottom: 15px;"><em>{role}</em></p>' if role else ''}
+                <div style='white-space: pre-wrap; line-height: 1.6;'>{response}</div>
+            </div>
+            """
+        
+        html_output += f"""
+        <div style='margin-top: 30px; padding: 20px; background: #0d1117; border-radius: 8px; border: 2px solid #8ab4f8;'>
+            <h2 style='color: #8ab4f8; margin-bottom: 15px;'>📊 Final Output</h2>
+            <div style='white-space: pre-wrap; line-height: 1.6;'>{result.get('final_output', '')}</div>
+        </div>
+        """
+        
+        html_output += "</div>"
+        
+        # Save to history
+        history_manager.save_conversation(
+            input_text=input_text,
+            context=context,
+            agents_used=[r.get("agent") for r in result.get("results", [])],
+            responses={r.get("agent"): r.get("response", "") for r in result.get("results", [])}
+        )
+        
+        return "\n".join(text_parts), html_output
+        
+    except json.JSONDecodeError as e:
+        return f"❌ Invalid JSON: {str(e)}", ""
+    except Exception as e:
+        return f"❌ Error executing workflow: {str(e)}", ""
 
 
 # ============================================================================
@@ -924,7 +1103,132 @@ def build_interface():
                         """)
             
             # ================================================================
-            # TAB 6: HISTORY & STATS
+            # TAB 6: CANVAS WORKFLOWS
+            # ================================================================
+            with gr.Tab("🎨 Canvas Workflows"):
+                gr.Markdown("### Execute Canvas Workflows")
+                gr.Markdown("Import and execute workflows from canvas-based workflow designers")
+                
+                with gr.Row():
+                    with gr.Column(scale=2):
+                        workflow_json_input = gr.Textbox(
+                            label="Workflow JSON",
+                            lines=15,
+                            placeholder='Paste your canvas workflow JSON here...\n\nExample format:\n{\n  "version": "1.1.0",\n  "format": "website-playground",\n  "name": "Workflow Name",\n  "graph": { "cells": [...] }\n}',
+                            info="Paste the JSON exported from your canvas workflow designer"
+                        )
+                        
+                        with gr.Row():
+                            parse_workflow_btn = gr.Button("🔍 Parse Workflow", variant="secondary")
+                        
+                        workflow_info = gr.Markdown(
+                            value="**Instructions:**\n1. Paste your canvas workflow JSON above\n2. Click 'Parse Workflow' to validate and view workflow structure\n3. Enter input text and execute the workflow",
+                            label="Workflow Info"
+                        )
+                        
+                        gr.Markdown("---")
+                        gr.Markdown("### Execute Workflow")
+                        
+                        workflow_input = gr.Textbox(
+                            label="Input Text",
+                            lines=4,
+                            placeholder="Enter your input for the workflow..."
+                        )
+                        
+                        workflow_context = gr.Textbox(
+                            label="Context (Optional)",
+                            lines=2,
+                            placeholder="Additional context..."
+                        )
+                        
+                        workflow_mode = gr.Radio(
+                            choices=["cumulative", "sequential", "parallel"],
+                            value="cumulative",
+                            label="Pass Mode",
+                            info="cumulative: All previous outputs | sequential: Only previous output | parallel: No chaining"
+                        )
+                        
+                        execute_workflow_btn = gr.Button("⚡ Execute Workflow", variant="primary", size="lg")
+                    
+                    with gr.Column(scale=1):
+                        gr.Markdown("### Quick Guide")
+                        gr.Markdown("""
+                        **Features:**
+                        - Import workflows from canvas designers
+                        - Auto-create agents from workflow config
+                        - Visual step-by-step execution
+                        - Full workflow history tracking
+                        
+                        **Workflow Format:**
+                        - Supports canvas JSON exports
+                        - Agent nodes with config
+                        - Trigger-start and end-sink nodes
+                        - Standard link connections
+                        
+                        **Tips:**
+                        - Parse workflow first to validate
+                        - Agents are created automatically if missing
+                        - Check execution order in workflow info
+                        """)
+                
+                with gr.Tabs():
+                    with gr.Tab("📊 Visual Output"):
+                        workflow_html_output = gr.HTML(
+                            value='<div style="text-align:center;padding:40px;color:#9aa4ad;">Parse and execute a workflow to see results...</div>'
+                        )
+                    
+                    with gr.Tab("📝 Raw Text"):
+                        workflow_text_output = gr.Textbox(
+                            label="Workflow Results",
+                            lines=20,
+                            placeholder="Workflow execution results will appear here..."
+                        )
+                
+                def show_workflow_loading():
+                    loading_html = '''
+                    <div style="text-align:center;padding:60px;background:#11161d;border-radius:8px;">
+                        <div style="font-size:48px;margin-bottom:20px;">🎨</div>
+                        <div style="font-size:18px;color:#8ab4f8;margin-bottom:10px;">Executing Workflow...</div>
+                        <div style="font-size:14px;color:#9aa4ad;">Processing your workflow with agents</div>
+                        <div style="margin-top:20px;">
+                            <div style="width:200px;height:4px;background:#1f2a35;margin:0 auto;border-radius:2px;overflow:hidden;">
+                                <div style="width:100%;height:100%;background:linear-gradient(90deg,#8ab4f8,#6a94f8,#8ab4f8);
+                                            animation:loading 1.5s ease-in-out infinite;"></div>
+                            </div>
+                        </div>
+                        <style>
+                            @keyframes loading {
+                                0% { transform: translateX(-100%); }
+                                100% { transform: translateX(100%); }
+                            }
+                        </style>
+                    </div>
+                    '''
+                    return "", loading_html
+                
+                def parse_workflow_wrapper(json_str: str):
+                    """Wrapper to handle parse workflow"""
+                    status, _ = parse_workflow_json(json_str)
+                    return status
+                
+                parse_workflow_btn.click(
+                    fn=parse_workflow_wrapper,
+                    inputs=[workflow_json_input],
+                    outputs=[workflow_info]
+                )
+                
+                execute_workflow_btn.click(
+                    fn=show_workflow_loading,
+                    inputs=None,
+                    outputs=[workflow_text_output, workflow_html_output]
+                ).then(
+                    fn=execute_workflow_handler,
+                    inputs=[workflow_json_input, workflow_input, workflow_context, workflow_mode],
+                    outputs=[workflow_text_output, workflow_html_output]
+                )
+            
+            # ================================================================
+            # TAB 7: HISTORY & STATS
             # ================================================================
             with gr.Tab("📊 History & Statistics"):
                 gr.Markdown("### Conversation History and Usage Analytics")
