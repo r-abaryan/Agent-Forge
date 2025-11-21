@@ -680,7 +680,8 @@ def execute_workflow_handler(
 
 def _format_markdown_response(text: str) -> str:
     """
-    Convert markdown text to HTML with enhanced formatting for charts and tables.
+    Convert markdown text to HTML with enhanced formatting for charts, tables, and all content types.
+    Works for any domain: flights, medical, cybersecurity, business, research, etc.
     
     Args:
         text: Markdown formatted text
@@ -689,19 +690,24 @@ def _format_markdown_response(text: str) -> str:
         HTML formatted string
     """
     import re
+    import html
     
     if not text:
         return ""
     
-    html = text
+    # Escape HTML first to prevent injection, then we'll add our formatting
+    text = html.escape(text)
     
-    # Convert headers
-    html = re.sub(r'^### (.*?)$', r'<h3 style="color: #8ab4f8; margin-top: 20px; margin-bottom: 10px;">\1</h3>', html, flags=re.MULTILINE)
-    html = re.sub(r'^## (.*?)$', r'<h2 style="color: #50fa7b; margin-top: 25px; margin-bottom: 15px;">\1</h2>', html, flags=re.MULTILINE)
-    html = re.sub(r'^# (.*?)$', r'<h1 style="color: #8ab4f8; margin-top: 30px; margin-bottom: 20px; font-size: 1.5em;">\1</h1>', html, flags=re.MULTILINE)
+    html_output = text
+    
+    # Convert headers (order matters - do larger headers first)
+    html_output = re.sub(r'^# (.*?)$', r'<h1 style="color: #8ab4f8; margin-top: 30px; margin-bottom: 20px; font-size: 1.5em; border-bottom: 2px solid #30363d; padding-bottom: 10px;">\1</h1>', html_output, flags=re.MULTILINE)
+    html_output = re.sub(r'^## (.*?)$', r'<h2 style="color: #50fa7b; margin-top: 25px; margin-bottom: 15px; font-size: 1.3em;">\1</h2>', html_output, flags=re.MULTILINE)
+    html_output = re.sub(r'^### (.*?)$', r'<h3 style="color: #8ab4f8; margin-top: 20px; margin-bottom: 10px; font-size: 1.1em;">\1</h3>', html_output, flags=re.MULTILINE)
+    html_output = re.sub(r'^#### (.*?)$', r'<h4 style="color: #ffa500; margin-top: 15px; margin-bottom: 8px;">\1</h4>', html_output, flags=re.MULTILINE)
     
     # Convert markdown tables to HTML tables
-    lines = html.split('\n')
+    lines = html_output.split('\n')
     in_table = False
     table_html = []
     table_rows = []
@@ -743,30 +749,72 @@ def _format_markdown_response(text: str) -> str:
             table_rows.append(line)
     
     # Join and process remaining formatting
-    html = '\n'.join(table_rows)
+    html_output = '\n'.join(table_rows)
     
-    # Convert code blocks
-    html = re.sub(r'```(\w+)?\n(.*?)```', r'<pre style="background: #161b22; padding: 15px; border-radius: 5px; border: 1px solid #30363d; overflow-x: auto; margin: 15px 0;"><code>\2</code></pre>', html, flags=re.DOTALL)
+    # Convert code blocks (handle both ``` and ```language)
+    html_output = re.sub(r'```(\w+)?\n(.*?)```', 
+                         r'<pre style="background: #161b22; padding: 15px; border-radius: 5px; border: 1px solid #30363d; overflow-x: auto; margin: 15px 0; font-family: \'Courier New\', monospace;"><code style="color: #e6edf3;">\2</code></pre>', 
+                         html_output, flags=re.DOTALL)
     
-    # Convert inline code
-    html = re.sub(r'`([^`]+)`', r'<code style="background: #161b22; padding: 2px 6px; border-radius: 3px; color: #ff79c6;">\1</code>', html)
+    # Convert inline code (but not inside code blocks)
+    html_output = re.sub(r'(?<!`)(?<!<code[^>]*>)`([^`\n]+)`(?!`)', 
+                        r'<code style="background: #161b22; padding: 2px 6px; border-radius: 3px; color: #ff79c6; font-family: \'Courier New\', monospace;">\1</code>', 
+                        html_output)
     
-    # Convert bold
-    html = re.sub(r'\*\*(.*?)\*\*', r'<strong style="color: #ffa500;">\1</strong>', html)
+    # Convert bold (but not inside code)
+    html_output = re.sub(r'\*\*([^*]+)\*\*', r'<strong style="color: #ffa500; font-weight: 600;">\1</strong>', html_output)
     
-    # Convert italic
-    html = re.sub(r'\*(.*?)\*', r'<em style="color: #9aa4ad;">\1</em>', html)
+    # Convert italic (but not inside code or bold)
+    html_output = re.sub(r'(?<!\*)\*([^*]+)\*(?!\*)', r'<em style="color: #9aa4ad; font-style: italic;">\1</em>', html_output)
     
     # Convert horizontal rules
-    html = re.sub(r'^---$', r'<hr style="border: none; border-top: 1px solid #30363d; margin: 20px 0;">', html, flags=re.MULTILINE)
+    html_output = re.sub(r'^---$', r'<hr style="border: none; border-top: 1px solid #30363d; margin: 20px 0;">', html_output, flags=re.MULTILINE)
+    html_output = re.sub(r'^\*\*\*$', r'<hr style="border: none; border-top: 1px solid #30363d; margin: 20px 0;">', html_output, flags=re.MULTILINE)
     
-    # Preserve ASCII charts (monospace font)
-    html = re.sub(r'(█+|▓+|▒+|░+|─+|│+|▰+|▱+)', r'<span style="font-family: monospace; color: #50fa7b;">\1</span>', html)
+    # Preserve ASCII/Unicode charts (monospace font with color)
+    # Match chart characters and preserve them with styling
+    chart_pattern = r'([█▓▒░▰▱─│┌┐└┘├┤┬┴┼●○◆◇]+)'
+    html_output = re.sub(chart_pattern, r'<span style="font-family: \'Courier New\', monospace; color: #50fa7b; letter-spacing: 1px;">\1</span>', html_output)
     
-    # Convert line breaks
-    html = html.replace('\n', '<br>')
+    # Convert bullet lists
+    html_output = re.sub(r'^[\*\-\+] (.+)$', r'<li style="margin: 5px 0; padding-left: 5px;">\1</li>', html_output, flags=re.MULTILINE)
+    # Wrap consecutive list items in <ul>
+    html_output = re.sub(r'(<li[^>]*>.*?</li>(?:\s*<li[^>]*>.*?</li>)*)', 
+                        r'<ul style="margin: 10px 0; padding-left: 25px; list-style-type: disc;">\1</ul>', 
+                        html_output, flags=re.DOTALL)
     
-    return html
+    # Convert numbered lists
+    html_output = re.sub(r'^\d+\. (.+)$', r'<li style="margin: 5px 0; padding-left: 5px;">\1</li>', html_output, flags=re.MULTILINE)
+    # Wrap consecutive numbered list items in <ol>
+    html_output = re.sub(r'(<li[^>]*>.*?</li>(?:\s*<li[^>]*>.*?</li>)*)', 
+                        r'<ol style="margin: 10px 0; padding-left: 25px;">\1</ol>', 
+                        html_output, flags=re.DOTALL)
+    
+    # Convert line breaks (but preserve in pre/code blocks)
+    # Split by lines and process
+    lines = html_output.split('\n')
+    processed_lines = []
+    in_pre = False
+    
+    for line in lines:
+        if '<pre' in line:
+            in_pre = True
+        if '</pre>' in line:
+            in_pre = False
+            processed_lines.append(line)
+            continue
+        
+        if not in_pre and line.strip() and not line.strip().startswith('<'):
+            processed_lines.append(line + '<br>')
+        else:
+            processed_lines.append(line)
+    
+    html_output = '\n'.join(processed_lines)
+    
+    # Final cleanup: remove extra breaks
+    html_output = re.sub(r'<br>\s*<br>\s*<br>+', r'<br><br>', html_output)
+    
+    return html_output
 
 
 # ============================================================================
