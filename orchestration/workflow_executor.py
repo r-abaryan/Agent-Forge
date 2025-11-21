@@ -438,25 +438,32 @@ class WorkflowExecutor:
                             
                             # Pattern 5: Look for structured data patterns (e.g., "from £450", "costs $120", "rated 8.5")
                             structured_patterns = [
-                                (r'(?:from|costs?|priced?|pays?|worth)\s+([£$€])\s*(\d+\.?\d*)', 1, 2),  # "from £450"
-                                (r'([£$€])\s*(\d+\.?\d*)\s+(?:for|each|per)', 1, 2),  # "£450 for"
-                                (r'rated\s+(\d+\.?\d*)\s*(?:out of|/|\%)', 1, None),  # "rated 8.5/10"
-                                (r'(\d+\.?\d*)\s*(?:hours?|hrs?|minutes?|mins?)\s+(?:duration|flight|trip)', 1, None),  # "2.5 hours duration"
+                                (r'(?:from|costs?|priced?|pays?|worth)\s+([£$€])\s*(\d+\.?\d*)', 2, 1),  # "from £450" - group 1=currency, group 2=number
+                                (r'([£$€])\s*(\d+\.?\d*)\s+(?:for|each|per)', 2, 1),  # "£450 for" - group 1=currency, group 2=number
+                                (r'rated\s+(\d+\.?\d*)\s*(?:out of|/|\%)', 1, None),  # "rated 8.5/10" - group 1=number
+                                (r'(\d+\.?\d*)\s*(?:hours?|hrs?|minutes?|mins?)\s+(?:duration|flight|trip)', 1, None),  # "2.5 hours duration" - group 1=number
                             ]
                             for pattern, value_group, unit_group in structured_patterns:
                                 for match in re.finditer(pattern, all_text, re.IGNORECASE):
-                                    if unit_group:
-                                        value = float(match.group(value_group))
-                                        unit = match.group(unit_group) if unit_group else ''
-                                    else:
-                                        value = float(match.group(value_group))
+                                    try:
+                                        # value_group is the group number containing the numeric value
+                                        value_str = match.group(value_group)
+                                        value = float(value_str)
+                                        
+                                        # unit_group is the group number containing the unit (currency, etc.)
                                         unit = ''
-                                    context_start = max(0, match.start() - 60)
-                                    context_end = min(len(all_text), match.end() + 40)
-                                    context = all_text[context_start:context_end]
-                                    label = _extract_label_from_context(context)
-                                    if label and is_valid_label(label) and value > 0:
-                                        data_points.append({'label': label, 'value': value, 'unit': unit})
+                                        if unit_group:
+                                            unit = match.group(unit_group)
+                                        
+                                        context_start = max(0, match.start() - 60)
+                                        context_end = min(len(all_text), match.end() + 40)
+                                        context = all_text[context_start:context_end]
+                                        label = _extract_label_from_context(context)
+                                        if label and is_valid_label(label) and value > 0:
+                                            data_points.append({'label': label, 'value': value, 'unit': unit})
+                                    except (ValueError, IndexError):
+                                        # Skip if conversion fails or group doesn't exist
+                                        continue
                             
                             # Pattern 6: Generic numbers with meaningful context (fallback - only if we still don't have enough)
                             if len(data_points) < 2:
