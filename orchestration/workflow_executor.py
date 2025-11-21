@@ -101,7 +101,7 @@ class WorkflowExecutor:
                 - "cumulative": Each agent sees all previous outputs
                 - "sequential": Each agent only sees previous agent's output
                 - "parallel": All agents see only initial input
-        
+            
         Returns:
             Dictionary with execution results
         """
@@ -244,69 +244,142 @@ class WorkflowExecutor:
                             # Similar to JavaScript extractChartData function - works for ANY scenario
                             import re
                             
-                            # Collect all text from current and previous responses
-                            all_text = response
+                            def clean_response_text(text):
+                                """Remove system prompts, guidelines, and agent metadata from responses"""
+                                # Remove common system prompt patterns
+                                patterns_to_remove = [
+                                    r'Response Guidelines:.*?(?=\n\n|\n[A-Z]|$)',
+                                    r'Data source:.*?(?=\n|$)',
+                                    r'Strategy:.*?(?=\n|$)',
+                                    r'Output format:.*?(?=\n|$)',
+                                    r'Output types:.*?(?=\n|$)',
+                                    r'Focus on:.*?(?=\n|$)',
+                                    r'Route:.*?(?=\n|$)',
+                                    r'Dates:.*?(?=\n|$)',
+                                    r'Context:.*?(?=\n\n|$)',
+                                    r'## Previous Results:.*?(?=\n\n|$)',
+                                    r'\[.*?Agent\]:\s*',
+                                    r'Human:.*?(?=\n|$)',
+                                ]
+                                cleaned = text
+                                for pattern in patterns_to_remove:
+                                    cleaned = re.sub(pattern, '', cleaned, flags=re.IGNORECASE | re.DOTALL)
+                                return cleaned.strip()
+                            
+                            # Collect and clean all text from current and previous responses
+                            all_text = clean_response_text(response)
                             for prev_result in results:
-                                all_text += " " + prev_result.get('response', '')
+                                cleaned_prev = clean_response_text(prev_result.get('response', ''))
+                                all_text += " " + cleaned_prev
+                            
+                            # Filter words to exclude (agent names, system terms, noise)
+                            exclude_words = {
+                                'agent', 'search', 'finder', 'generator', 'discount', 'flight', 'report',
+                                'response', 'guidelines', 'data', 'source', 'strategy', 'output', 'format',
+                                'context', 'previous', 'results', 'human', 'focus', 'route', 'dates',
+                                'item', 'option', 'key', 'full', 'details', 'points', 'summary'
+                            }
+                            
+                            def is_valid_label(label):
+                                """Check if label is meaningful and not noise"""
+                                if not label or len(label) < 2 or len(label) > 30:
+                                    return False
+                                label_lower = label.lower()
+                                # Check if contains excluded words
+                                words = label_lower.split()
+                                if any(w in exclude_words for w in words):
+                                    return False
+                                # Check if it's just a number or generic term
+                                if label_lower in ['item', 'option', 'value', 'data', 'result']:
+                                    return False
+                                return True
                             
                             # Extract data points with labels (generic pattern extraction)
                             data_points = []
                             
-                            # Pattern 1: Numbers with currency symbols
+                            # Pattern 1: Numbers with currency symbols (£$€)
                             for match in re.finditer(r'([£$€])\s*(\d+\.?\d*)', all_text):
                                 currency = match.group(1)
                                 value = float(match.group(2))
-                                # Extract label from context (50 chars before)
-                                context_start = max(0, match.start() - 50)
-                                context = all_text[context_start:match.start()]
+                                # Extract label from context (80 chars before and after)
+                                context_start = max(0, match.start() - 80)
+                                context_end = min(len(all_text), match.end() + 30)
+                                context = all_text[context_start:context_end]
                                 label = _extract_label_from_context(context)
-                                if not label:
-                                    label = f"Item {len(data_points) + 1}"
-                                data_points.append({'label': label, 'value': value, 'unit': currency})
+                                if label and is_valid_label(label):
+                                    data_points.append({'label': label, 'value': value, 'unit': currency})
                             
                             # Pattern 2: Numbers with percentages
                             for match in re.finditer(r'(\d+\.?\d*)\s*%', all_text):
                                 value = float(match.group(1))
-                                context_start = max(0, match.start() - 50)
-                                context = all_text[context_start:match.start()]
-                                label = _extract_label_from_context(context) or f"Item {len(data_points) + 1}"
-                                data_points.append({'label': label, 'value': value, 'unit': '%'})
+                                if value < 0 or value > 100:
+                                    continue
+                                context_start = max(0, match.start() - 80)
+                                context_end = min(len(all_text), match.end() + 30)
+                                context = all_text[context_start:context_end]
+                                label = _extract_label_from_context(context)
+                                if label and is_valid_label(label):
+                                    data_points.append({'label': label, 'value': value, 'unit': '%'})
                             
-                            # Pattern 3: Colon-separated labels (e.g., "Price: 150", "Score: 8.5")
+                            # Pattern 3: Colon-separated labels (e.g., "Price: 150", "Score: 8.5", "British Airways: £450")
                             for match in re.finditer(r'([A-Z][A-Za-z\s]{2,30}):\s*(\d+\.?\d*)', all_text):
                                 label = match.group(1).strip()
                                 value = float(match.group(2))
-                                # Skip common stop words
-                                stop_words = {'The', 'This', 'That', 'These', 'With', 'From', 'To', 'And'}
-                                if label.split()[0] not in stop_words:
-                                    data_points.append({'label': label, 'value': value, 'unit': ''})
+                                if is_valid_label(label) and value > 0:
+                                    unit = ''
+                                    # Check if there's a currency symbol nearby
+                                    if re.search(r'[£$€]', all_text[max(0, match.start()-10):match.end()+10]):
+                                        unit = re.search(r'([£$€])', all_text[max(0, match.start()-10):match.end()+10]).group(1)
+                                    data_points.append({'label': label, 'value': value, 'unit': unit})
                             
-                            # Pattern 4: Generic numbers with context (fallback)
+                            # Pattern 4: Table structures (markdown tables)
+                            table_pattern = r'\|([^|]+)\|([^|]+)\|'
+                            for match in re.finditer(table_pattern, all_text):
+                                label_cell = match.group(1).strip()
+                                value_cell = match.group(2).strip()
+                                # Extract number from value cell
+                                num_match = re.search(r'(\d+\.?\d*)', value_cell)
+                                if num_match and is_valid_label(label_cell):
+                                    value = float(num_match.group(1))
+                                    unit = ''
+                                    if re.search(r'[£$€]', value_cell):
+                                        unit = re.search(r'([£$€])', value_cell).group(1)
+                                    elif '%' in value_cell:
+                                        unit = '%'
+                                    if value > 0:
+                                        data_points.append({'label': label_cell, 'value': value, 'unit': unit})
+                            
+                            # Pattern 5: Generic numbers with meaningful context (fallback)
                             if len(data_points) < 2:
                                 for match in re.finditer(r'\b(\d+\.?\d*)\b', all_text):
                                     value = float(match.group(1))
                                     # Skip years, small numbers, or unrealistic values
                                     if value < 0.1 or value > 1000000 or (1900 < value < 2100 and value % 1 == 0):
                                         continue
-                                    context_start = max(0, match.start() - 80)
-                                    context_end = min(len(all_text), match.end() + 30)
+                                    context_start = max(0, match.start() - 100)
+                                    context_end = min(len(all_text), match.end() + 50)
                                     context = all_text[context_start:context_end]
                                     label = _extract_label_from_context(context)
-                                    if label and len(data_points) < 10:
-                                        data_points.append({'label': label, 'value': value, 'unit': ''})
+                                    if label and is_valid_label(label) and len(data_points) < 10:
+                                        unit = ''
+                                        if re.search(r'[£$€]', context):
+                                            unit = re.search(r'([£$€])', context).group(1)
+                                        data_points.append({'label': label, 'value': value, 'unit': unit})
                             
-                            # Remove duplicates and limit to top 8
+                            # Remove duplicates and filter out invalid labels
                             unique_points = []
                             seen = set()
                             for point in data_points:
-                                key = (point['label'], round(point['value'], 2))
-                                if key not in seen and point['value'] > 0:
+                                # Normalize label for deduplication
+                                label_normalized = point['label'].lower().strip()
+                                key = (label_normalized, round(point['value'], 2))
+                                if key not in seen and point['value'] > 0 and is_valid_label(point['label']):
                                     seen.add(key)
                                     unique_points.append(point)
                                     if len(unique_points) >= 8:
                                         break
                             
-                            # Generate chart and table if we have data
+                            # Generate chart and table if we have meaningful data
                             if len(unique_points) >= 2:
                                 # Sort by value (descending)
                                 unique_points.sort(key=lambda x: x['value'], reverse=True)
