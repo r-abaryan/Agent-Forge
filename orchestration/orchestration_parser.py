@@ -302,47 +302,77 @@ class OrchestrationParser:
         prompt_parts = []
         
         # Special handling for Report Generator Agent
-        if "report" in title.lower() or "report" in role.lower() or config.get("format") in ["Sheet + Chart", "CSV, JSON, Charts"]:
+        if ("report" in title.lower() or "report" in role.lower() or 
+            config.get("format") in ["Sheet + Chart", "CSV, JSON, Charts"] or
+            "chart" in str(config.get("output", "")).lower() or
+            "analyst" in role.lower()):
             return self._build_report_generator_prompt(config, title, role)
+        
+        # Build enhanced prompt for all agents
+        prompt_parts = []
         
         # Start with role if available
         if role:
             prompt_parts.append(f"You are a {role}.")
         elif title:
             prompt_parts.append(f"You are {title}.")
+        else:
+            prompt_parts.append(f"You are {title or 'an AI agent'}.")
         
-        # Add config details
+        # Add domain-specific guidance
+        prompt_parts.append("Your goal is to provide comprehensive, well-structured, and actionable responses.")
+        
+        # Add config details with context
         if config.get("source"):
-            prompt_parts.append(f"Data source: {config['source']}")
+            prompt_parts.append(f"**Data Source**: {config['source']}")
         
         if config.get("criteria"):
-            prompt_parts.append(f"Focus on: {config['criteria']}")
+            prompt_parts.append(f"**Focus Areas**: {config['criteria']}")
         
         if config.get("strategy"):
-            prompt_parts.append(f"Strategy: {config['strategy']}")
+            prompt_parts.append(f"**Strategy**: {config['strategy']}")
         
         if config.get("route"):
-            prompt_parts.append(f"Route: {config['route']}")
+            prompt_parts.append(f"**Route/Path**: {config['route']}")
         
         if config.get("dates"):
-            prompt_parts.append(f"Dates: {config['dates']}")
+            prompt_parts.append(f"**Timeframe**: {config['dates']}")
         
         if config.get("format"):
-            prompt_parts.append(f"Output format: {config['format']}")
+            prompt_parts.append(f"**Output Format**: {config['format']}")
         
         if config.get("output"):
-            prompt_parts.append(f"Output types: {config['output']}")
+            prompt_parts.append(f"**Output Types**: {config['output']}")
+        
+        # Add quality guidelines
+        prompt_parts.append("\n**Response Guidelines**:")
+        prompt_parts.append("- Structure your response clearly with headers and sections when appropriate")
+        prompt_parts.append("- Use tables for structured data comparisons")
+        prompt_parts.append("- Include relevant metrics, statistics, or key findings")
+        prompt_parts.append("- Provide actionable insights or recommendations when applicable")
+        prompt_parts.append("- Format numbers, dates, and data consistently")
+        prompt_parts.append("- Be thorough but concise")
         
         # Build final prompt
         if prompt_parts:
             return "\n".join(prompt_parts)
         else:
-            # Default prompt if no config
-            return f"You are {title or 'an AI agent'}. Provide helpful, accurate responses based on the input provided."
+            # Default enhanced prompt
+            return f"""You are {title or 'an AI agent'}. 
+
+Your role is to provide helpful, accurate, and well-structured responses based on the input provided.
+
+**Response Guidelines**:
+- Structure your response clearly with appropriate sections
+- Use tables for structured data when helpful
+- Include key metrics and findings
+- Provide actionable recommendations when relevant
+- Format information consistently and professionally"""
     
     def _build_report_generator_prompt(self, config: Dict[str, Any], title: str, role: str) -> str:
         """
         Build enhanced system prompt for Report Generator agents.
+        Generic and applicable to any domain (flights, medical, cybersecurity, etc.)
         
         Args:
             config: Agent configuration dictionary
@@ -352,58 +382,84 @@ class OrchestrationParser:
         Returns:
             Enhanced system prompt for report generation
         """
-        prompt = f"""You are {title or 'a Report Generator Agent'}, a Data Analyst and Report Generator specialized in creating comprehensive, well-structured reports.
+        prompt = f"""You are {title or 'a Report Generator Agent'}, a Data Analyst and Report Generator specialized in creating comprehensive, well-structured reports across any domain.
 
 Your role: {role or 'Data Analyst'}
 
 **REPORT GENERATION REQUIREMENTS:**
 
-1. **Structured Data Tables**: Always organize data in clear markdown tables with proper headers and alignment.
+1. **Structured Data Tables**: Always organize data in clear markdown tables with proper headers and alignment. Use tables for:
+   - Comparisons (options, alternatives, results)
+   - Metrics and statistics
+   - Categorized data
+   - Time-series data
+   - Any structured information
 
-2. **Visual Charts**: Create ASCII/Unicode bar charts, line charts, and comparison visualizations using characters like:
-   - Bar charts: █ ▓ ▒ ░
-   - Line charts: ─ │ ┌ ┐ └ ┘
-   - Progress: ▰ ▱
-   - Example: Price Comparison
-     Economy:  ████████████ $500
-     Business: ████████████████████ $1200
-     First:    ████████████████████████████ $2500
+2. **Visual Charts**: Create ASCII/Unicode charts and visualizations using characters like:
+   - Bar charts: █ ▓ ▒ ░ (for comparisons, distributions, rankings)
+   - Line charts: ─ │ ┌ ┐ └ ┘ (for trends, timelines, progressions)
+   - Progress indicators: ▰ ▱ (for completion, percentages)
+   - Examples:
+     * Comparison Chart:
+       Option A:  ████████████ 75%
+       Option B:  ████████████████████ 95%
+       Option C:  ████████ 50%
+     
+     * Trend Chart:
+       Q1 ──────●
+       Q2 ──────────●
+       Q3 ────────────────●
+       Q4 ──────────────────────●
 
-3. **Data Formats**: Provide data in multiple formats:
-   - **Markdown Tables**: For easy reading
-   - **JSON Structure**: For programmatic access (when requested)
-   - **CSV Format**: For spreadsheet import (when requested)
+3. **Data Formats**: Provide data in multiple formats when applicable:
+   - **Markdown Tables**: For easy reading and documentation
+   - **JSON Structure**: For programmatic access and API integration
+   - **CSV Format**: For spreadsheet import and data analysis tools
 
-4. **Report Sections**: Structure your reports with:
-   - Executive Summary
-   - Detailed Analysis
-   - Visual Comparisons (charts)
-   - Data Tables
-   - Recommendations
-   - Export Formats (JSON/CSV when applicable)
+4. **Report Sections**: Structure your reports with clear sections:
+   - **Executive Summary**: High-level overview and key findings
+   - **Detailed Analysis**: In-depth examination of data/results
+   - **Visual Comparisons**: Charts and graphs for quick understanding
+   - **Data Tables**: Structured data presentation
+   - **Key Metrics**: Important statistics and numbers
+   - **Recommendations**: Actionable insights and next steps
+   - **Export Formats**: JSON/CSV when applicable for further processing
 
-5. **Chart Types**: Create appropriate visualizations:
-   - Price comparisons (bar charts)
-   - Timeline/route maps (text-based diagrams)
-   - Distribution charts (horizontal bars)
-   - Trend analysis (line charts)
+5. **Chart Types by Domain**:
+   - **Business/Finance**: Price comparisons, cost analysis, ROI charts, budget breakdowns
+   - **Medical/Health**: Symptom distributions, treatment comparisons, timeline visualizations
+   - **Cybersecurity**: Threat levels, risk assessments, vulnerability rankings, incident timelines
+   - **Research/Analytics**: Data distributions, trend analysis, correlation visualizations
+   - **Operations**: Process flows, performance metrics, efficiency comparisons
+   - **Any Domain**: Adapt chart types to the data context
 
-6. **Output Quality**: 
-   - Use clear section headers (##, ###)
-   - Format numbers consistently (currency, percentages)
-   - Highlight key findings
-   - Provide actionable recommendations
-   - Include summary statistics
+6. **Output Quality Standards**: 
+   - Use clear section headers (##, ###) for navigation
+   - Format numbers consistently (currency, percentages, decimals as appropriate)
+   - Highlight key findings with bold text or emphasis
+   - Provide actionable recommendations based on analysis
+   - Include summary statistics (totals, averages, ranges, etc.)
+   - Use appropriate units and labels
+   - Ensure data accuracy and consistency
 
-**IMPORTANT**: When processing flight search results, discount information, or any structured data:
-- Extract all key metrics (prices, durations, savings, etc.)
-- Create comparison tables
-- Generate visual charts for price comparisons
-- Provide JSON/CSV export formats
-- Include route visualizations when applicable
-- Add summary statistics and recommendations
+7. **Domain Adaptation**: 
+   - Analyze the input data to understand the domain context
+   - Extract relevant metrics based on the domain (prices for commerce, scores for assessments, counts for analytics, etc.)
+   - Create appropriate visualizations for the data type
+   - Use domain-appropriate terminology and formatting
+   - Structure recommendations relevant to the domain
 
-Always format your response as a comprehensive, professional report with clear structure, visual elements, and export-ready data formats."""
+**IMPORTANT**: When processing any input data:
+- Extract all key metrics, values, and statistics
+- Identify comparison opportunities (options, alternatives, before/after, etc.)
+- Create appropriate visual charts for the data type
+- Organize information in clear, scannable tables
+- Provide JSON/CSV export formats when structured data is present
+- Include summary statistics and key insights
+- Add actionable recommendations based on the analysis
+- Format consistently and professionally
+
+Always format your response as a comprehensive, professional report with clear structure, visual elements, and export-ready data formats. Adapt your approach to the specific domain and data type you're analyzing."""
 
         # Add specific config details
         if config.get("format"):
@@ -411,6 +467,12 @@ Always format your response as a comprehensive, professional report with clear s
         
         if config.get("output"):
             prompt += f"\n**Output Types**: {config['output']}"
+        
+        if config.get("source"):
+            prompt += f"\n**Data Source**: {config['source']}"
+        
+        if config.get("strategy"):
+            prompt += f"\n**Analysis Strategy**: {config['strategy']}"
         
         return prompt
     
