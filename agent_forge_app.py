@@ -639,18 +639,24 @@ def execute_workflow_handler(
             border_color = colors[idx % len(colors)]
             status_icon = "✅" if success else "❌"
             
+            # Convert markdown to HTML for better rendering
+            formatted_response = _format_markdown_response(response)
+            
             html_output += f"""
             <div style='margin-bottom: 30px; border-left: 5px solid {border_color}; padding: 20px; background: #0d1117; border-radius: 8px;'>
                 <h2 style='color: {border_color}; margin-bottom: 10px;'>{status_icon} Step {step_num}: {agent}</h2>
                 {f'<p style="color: #9aa4ad; margin-bottom: 15px;"><em>{role}</em></p>' if role else ''}
-                <div style='white-space: pre-wrap; line-height: 1.6;'>{response}</div>
+                <div style='line-height: 1.8; color: #e6edf3;'>{formatted_response}</div>
             </div>
             """
+        
+        # Format final output with markdown support
+        final_output_formatted = _format_markdown_response(result.get('final_output', ''))
         
         html_output += f"""
         <div style='margin-top: 30px; padding: 20px; background: #0d1117; border-radius: 8px; border: 2px solid #8ab4f8;'>
             <h2 style='color: #8ab4f8; margin-bottom: 15px;'>📊 Final Output</h2>
-            <div style='white-space: pre-wrap; line-height: 1.6;'>{result.get('final_output', '')}</div>
+            <div style='line-height: 1.8; color: #e6edf3;'>{final_output_formatted}</div>
         </div>
         """
         
@@ -670,6 +676,97 @@ def execute_workflow_handler(
         return f"❌ Invalid JSON: {str(e)}", ""
     except Exception as e:
         return f"❌ Error executing workflow: {str(e)}", ""
+
+
+def _format_markdown_response(text: str) -> str:
+    """
+    Convert markdown text to HTML with enhanced formatting for charts and tables.
+    
+    Args:
+        text: Markdown formatted text
+        
+    Returns:
+        HTML formatted string
+    """
+    import re
+    
+    if not text:
+        return ""
+    
+    html = text
+    
+    # Convert headers
+    html = re.sub(r'^### (.*?)$', r'<h3 style="color: #8ab4f8; margin-top: 20px; margin-bottom: 10px;">\1</h3>', html, flags=re.MULTILINE)
+    html = re.sub(r'^## (.*?)$', r'<h2 style="color: #50fa7b; margin-top: 25px; margin-bottom: 15px;">\1</h2>', html, flags=re.MULTILINE)
+    html = re.sub(r'^# (.*?)$', r'<h1 style="color: #8ab4f8; margin-top: 30px; margin-bottom: 20px; font-size: 1.5em;">\1</h1>', html, flags=re.MULTILINE)
+    
+    # Convert markdown tables to HTML tables
+    lines = html.split('\n')
+    in_table = False
+    table_html = []
+    table_rows = []
+    
+    for line in lines:
+        # Detect table start
+        if '|' in line and not in_table:
+            in_table = True
+            # Parse header
+            if line.strip().startswith('|'):
+                headers = [h.strip() for h in line.split('|')[1:-1]]
+                table_html.append('<table style="width: 100%; border-collapse: collapse; margin: 15px 0; background: #161b22; border: 1px solid #30363d;">')
+                table_html.append('<thead><tr style="background: #21262d;">')
+                for header in headers:
+                    table_html.append(f'<th style="padding: 12px; text-align: left; border: 1px solid #30363d; color: #8ab4f8;">{header}</th>')
+                table_html.append('</tr></thead><tbody>')
+                continue
+        
+        # Process table rows
+        if in_table:
+            if '|' in line:
+                cells = [c.strip() for c in line.split('|')[1:-1]]
+                # Skip separator row
+                if all(c.replace('-', '').replace(':', '').strip() == '' for c in cells):
+                    continue
+                table_html.append('<tr>')
+                for cell in cells:
+                    table_html.append(f'<td style="padding: 10px; border: 1px solid #30363d; color: #e6edf3;">{cell}</td>')
+                table_html.append('</tr>')
+            else:
+                # End of table
+                if table_html:
+                    table_html.append('</tbody></table>')
+                    table_rows.append(''.join(table_html))
+                    table_html = []
+                in_table = False
+                table_rows.append(line)
+        else:
+            table_rows.append(line)
+    
+    # Join and process remaining formatting
+    html = '\n'.join(table_rows)
+    
+    # Convert code blocks
+    html = re.sub(r'```(\w+)?\n(.*?)```', r'<pre style="background: #161b22; padding: 15px; border-radius: 5px; border: 1px solid #30363d; overflow-x: auto; margin: 15px 0;"><code>\2</code></pre>', html, flags=re.DOTALL)
+    
+    # Convert inline code
+    html = re.sub(r'`([^`]+)`', r'<code style="background: #161b22; padding: 2px 6px; border-radius: 3px; color: #ff79c6;">\1</code>', html)
+    
+    # Convert bold
+    html = re.sub(r'\*\*(.*?)\*\*', r'<strong style="color: #ffa500;">\1</strong>', html)
+    
+    # Convert italic
+    html = re.sub(r'\*(.*?)\*', r'<em style="color: #9aa4ad;">\1</em>', html)
+    
+    # Convert horizontal rules
+    html = re.sub(r'^---$', r'<hr style="border: none; border-top: 1px solid #30363d; margin: 20px 0;">', html, flags=re.MULTILINE)
+    
+    # Preserve ASCII charts (monospace font)
+    html = re.sub(r'(█+|▓+|▒+|░+|─+|│+|▰+|▱+)', r'<span style="font-family: monospace; color: #50fa7b;">\1</span>', html)
+    
+    # Convert line breaks
+    html = html.replace('\n', '<br>')
+    
+    return html
 
 
 # ============================================================================

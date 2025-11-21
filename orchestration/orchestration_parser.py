@@ -301,6 +301,10 @@ class OrchestrationParser:
         """
         prompt_parts = []
         
+        # Special handling for Report Generator Agent
+        if "report" in title.lower() or "report" in role.lower() or config.get("format") in ["Sheet + Chart", "CSV, JSON, Charts"]:
+            return self._build_report_generator_prompt(config, title, role)
+        
         # Start with role if available
         if role:
             prompt_parts.append(f"You are a {role}.")
@@ -335,6 +339,80 @@ class OrchestrationParser:
         else:
             # Default prompt if no config
             return f"You are {title or 'an AI agent'}. Provide helpful, accurate responses based on the input provided."
+    
+    def _build_report_generator_prompt(self, config: Dict[str, Any], title: str, role: str) -> str:
+        """
+        Build enhanced system prompt for Report Generator agents.
+        
+        Args:
+            config: Agent configuration dictionary
+            title: Agent title
+            role: Agent role
+            
+        Returns:
+            Enhanced system prompt for report generation
+        """
+        prompt = f"""You are {title or 'a Report Generator Agent'}, a Data Analyst and Report Generator specialized in creating comprehensive, well-structured reports.
+
+Your role: {role or 'Data Analyst'}
+
+**REPORT GENERATION REQUIREMENTS:**
+
+1. **Structured Data Tables**: Always organize data in clear markdown tables with proper headers and alignment.
+
+2. **Visual Charts**: Create ASCII/Unicode bar charts, line charts, and comparison visualizations using characters like:
+   - Bar charts: █ ▓ ▒ ░
+   - Line charts: ─ │ ┌ ┐ └ ┘
+   - Progress: ▰ ▱
+   - Example: Price Comparison
+     Economy:  ████████████ $500
+     Business: ████████████████████ $1200
+     First:    ████████████████████████████ $2500
+
+3. **Data Formats**: Provide data in multiple formats:
+   - **Markdown Tables**: For easy reading
+   - **JSON Structure**: For programmatic access (when requested)
+   - **CSV Format**: For spreadsheet import (when requested)
+
+4. **Report Sections**: Structure your reports with:
+   - Executive Summary
+   - Detailed Analysis
+   - Visual Comparisons (charts)
+   - Data Tables
+   - Recommendations
+   - Export Formats (JSON/CSV when applicable)
+
+5. **Chart Types**: Create appropriate visualizations:
+   - Price comparisons (bar charts)
+   - Timeline/route maps (text-based diagrams)
+   - Distribution charts (horizontal bars)
+   - Trend analysis (line charts)
+
+6. **Output Quality**: 
+   - Use clear section headers (##, ###)
+   - Format numbers consistently (currency, percentages)
+   - Highlight key findings
+   - Provide actionable recommendations
+   - Include summary statistics
+
+**IMPORTANT**: When processing flight search results, discount information, or any structured data:
+- Extract all key metrics (prices, durations, savings, etc.)
+- Create comparison tables
+- Generate visual charts for price comparisons
+- Provide JSON/CSV export formats
+- Include route visualizations when applicable
+- Add summary statistics and recommendations
+
+Always format your response as a comprehensive, professional report with clear structure, visual elements, and export-ready data formats."""
+
+        # Add specific config details
+        if config.get("format"):
+            prompt += f"\n\n**Required Output Format**: {config['format']}"
+        
+        if config.get("output"):
+            prompt += f"\n**Output Types**: {config['output']}"
+        
+        return prompt
     
     def validate_workflow(self, parsed_workflow: Dict[str, Any]) -> Tuple[bool, List[str]]:
         """

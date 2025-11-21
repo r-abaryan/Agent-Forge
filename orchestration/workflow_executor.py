@@ -119,18 +119,23 @@ class WorkflowExecutor:
                 
                 # Determine input based on pass mode
                 if pass_mode == "cumulative" and idx > 0:
-                    # Include all previous outputs
-                    chain_context = f"Previous agents' outputs:\n\n" + "\n\n".join([
-                        f"[{r['agent']}]: {r['response']}" 
-                        for r in results if r.get('success', False)
-                    ])
+                    # Include all previous outputs with better formatting
+                    previous_outputs = []
+                    for r in results:
+                        if r.get('success', False):
+                            agent_name = r.get('agent', 'Unknown')
+                            response = r.get('response', '')
+                            previous_outputs.append(f"**{agent_name}** ({r.get('role', 'Agent')}):\n{response}")
+                    
+                    chain_context = "## Previous Agent Results:\n\n" + "\n\n---\n\n".join(previous_outputs)
                     agent_input = initial_input
                     agent_context = f"{context}\n\n{chain_context}" if context else chain_context
                 
                 elif pass_mode == "sequential" and idx > 0:
-                    # Only use previous agent's output
-                    agent_input = results[-1]['response'] if results else initial_input
-                    agent_context = context
+                    # Only use previous agent's output, but include original context
+                    prev_response = results[-1]['response'] if results else ""
+                    agent_input = prev_response
+                    agent_context = f"{context}\n\n**Original Request:** {initial_input}" if context else f"**Original Request:** {initial_input}"
                 
                 else:  # First agent or parallel mode
                     agent_input = current_input
