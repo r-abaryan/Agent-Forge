@@ -80,7 +80,12 @@ def initialize(model_path: str = DEFAULT_MODEL):
     
     # Initialize workflow executor (needs agent_manager and llm)
     global workflow_executor
-    workflow_executor = WorkflowExecutor(agent_manager, llm, auto_create_agents=True)
+    try:
+        workflow_executor = WorkflowExecutor(agent_manager, llm, auto_create_agents=True)
+        print("Workflow executor initialized successfully")
+    except Exception as e:
+        print(f"Warning: Could not initialize workflow executor: {e}")
+        workflow_executor = None
     
     print("Initialization complete!")
 
@@ -582,6 +587,16 @@ def execute_workflow_handler(
         if not input_text or not input_text.strip():
             return "⚠️ Please provide input text", ""
         
+        # Check if workflow executor is initialized
+        if workflow_executor is None:
+            error_html = """
+            <div style='padding: 20px; background: #1a1f26; color: #e6edf3;'>
+                <h2 style='color: #ff6b6b;'>❌ Workflow Executor Not Initialized</h2>
+                <p style='color: #9aa4ad;'>Please restart the application to initialize the workflow executor.</p>
+            </div>
+            """
+            return "❌ Workflow executor not initialized. Please restart the application.", error_html
+        
         # Parse JSON
         workflow_json = json.loads(workflow_json_str)
         
@@ -595,70 +610,107 @@ def execute_workflow_handler(
         
         if not result.get("success"):
             error_msg = result.get("error", "Unknown error")
-            return f"❌ Workflow execution failed: {error_msg}", ""
+            error_html = f"""
+            <div style='padding: 20px; background: #1a1f26; color: #e6edf3;'>
+                <h2 style='color: #ff6b6b;'>❌ Workflow Execution Failed</h2>
+                <p style='color: #9aa4ad;'>{error_msg}</p>
+                <p style='margin-top: 15px; color: #8ab4f8;'>Workflow: {result.get('workflow_name', 'Unknown')}</p>
+            </div>
+            """
+            return f"❌ Workflow execution failed: {error_msg}", error_html
+        
+        # Debug: Print result structure
+        print(f"Workflow result keys: {result.keys()}")
+        print(f"Results count: {len(result.get('results', []))}")
         
         # Build text output
         text_parts = [
-            f"# Workflow: {result['workflow_name']}\n",
+            f"# Workflow: {result.get('workflow_name', 'Unknown')}\n",
             f"**Status:** ✅ Success",
-            f"**Steps:** {result['successful_steps']}/{result['total_steps']}\n",
+            f"**Steps:** {result.get('successful_steps', 0)}/{result.get('total_steps', 0)}\n",
             "---\n"
         ]
         
-        for step_result in result.get("results", []):
-            agent = step_result.get("agent", "Unknown")
-            role = step_result.get("role", "")
-            response = step_result.get("response", "")
-            success = step_result.get("success", False)
-            step_num = step_result.get("step", 0)
-            
-            status = "✅" if success else "❌"
-            text_parts.append(f"## {status} Step {step_num}: {agent}")
-            if role:
-                text_parts.append(f"**Role:** {role}\n")
-            text_parts.append(f"{response}\n")
-            text_parts.append("---\n")
+        results_list = result.get("results", [])
+        if not results_list:
+            text_parts.append("⚠️ No results returned from workflow execution.\n")
+            text_parts.append("This might indicate an issue with agent execution.\n")
+        else:
+            for step_result in results_list:
+                agent = step_result.get("agent", "Unknown")
+                role = step_result.get("role", "")
+                response = step_result.get("response", "")
+                success = step_result.get("success", False)
+                step_num = step_result.get("step", 0)
+                
+                status = "✅" if success else "❌"
+                text_parts.append(f"## {status} Step {step_num}: {agent}")
+                if role:
+                    text_parts.append(f"**Role:** {role}\n")
+                text_parts.append(f"{response}\n")
+                text_parts.append("---\n")
         
-        text_parts.append(f"\n### Final Output:\n{result.get('final_output', '')}")
+        final_output = result.get('final_output', '')
+        if final_output:
+            text_parts.append(f"\n### Final Output:\n{final_output}")
+        else:
+            text_parts.append(f"\n### Final Output:\n(No final output generated)")
         
         # Build HTML output
         html_output = "<div style='padding: 20px; background: #1a1f26; color: #e6edf3;'>"
-        html_output += f"<h1 style='color: #8ab4f8; margin-bottom: 20px;'>🎯 {result['workflow_name']}</h1>"
-        html_output += f"<p><strong>Status:</strong> ✅ Success | <strong>Steps:</strong> {result['successful_steps']}/{result['total_steps']}</p>"
+        html_output += f"<h1 style='color: #8ab4f8; margin-bottom: 20px;'>🎯 {result.get('workflow_name', 'Unknown Workflow')}</h1>"
+        html_output += f"<p><strong>Status:</strong> ✅ Success | <strong>Steps:</strong> {result.get('successful_steps', 0)}/{result.get('total_steps', 0)}</p>"
         html_output += "<hr style='border-color: #30363d; margin: 20px 0;'>"
         
-        colors = ["#8ab4f8", "#ffa500", "#50fa7b", "#ff79c6", "#bd93f9"]
-        
-        for idx, step_result in enumerate(result.get("results", [])):
-            agent = step_result.get("agent", "Unknown")
-            role = step_result.get("role", "")
-            response = step_result.get("response", "")
-            success = step_result.get("success", False)
-            step_num = step_result.get("step", 0)
-            
-            border_color = colors[idx % len(colors)]
-            status_icon = "✅" if success else "❌"
-            
-            # Convert markdown to HTML for better rendering
-            formatted_response = _format_markdown_response(response)
-            
-            html_output += f"""
-            <div style='margin-bottom: 30px; border-left: 5px solid {border_color}; padding: 20px; background: #0d1117; border-radius: 8px;'>
-                <h2 style='color: {border_color}; margin-bottom: 10px;'>{status_icon} Step {step_num}: {agent}</h2>
-                {f'<p style="color: #9aa4ad; margin-bottom: 15px;"><em>{role}</em></p>' if role else ''}
-                <div style='line-height: 1.8; color: #e6edf3;'>{formatted_response}</div>
+        results_list = result.get("results", [])
+        if not results_list:
+            html_output += """
+            <div style='margin-bottom: 30px; padding: 20px; background: #0d1117; border-radius: 8px; border-left: 5px solid #ffa500;'>
+                <h2 style='color: #ffa500; margin-bottom: 10px;'>⚠️ No Results</h2>
+                <p style='color: #9aa4ad;'>No results were returned from workflow execution. This might indicate an issue with agent execution.</p>
             </div>
             """
+        else:
+            colors = ["#8ab4f8", "#ffa500", "#50fa7b", "#ff79c6", "#bd93f9"]
+            
+            for idx, step_result in enumerate(results_list):
+                agent = step_result.get("agent", "Unknown")
+                role = step_result.get("role", "")
+                response = step_result.get("response", "")
+                success = step_result.get("success", False)
+                step_num = step_result.get("step", 0)
+                
+                border_color = colors[idx % len(colors)]
+                status_icon = "✅" if success else "❌"
+                
+                # Convert markdown to HTML for better rendering
+                formatted_response = _format_markdown_response(response) if response else "<p style='color: #9aa4ad;'><em>No response generated</em></p>"
+                
+                html_output += f"""
+                <div style='margin-bottom: 30px; border-left: 5px solid {border_color}; padding: 20px; background: #0d1117; border-radius: 8px;'>
+                    <h2 style='color: {border_color}; margin-bottom: 10px;'>{status_icon} Step {step_num}: {agent}</h2>
+                    {f'<p style="color: #9aa4ad; margin-bottom: 15px;"><em>{role}</em></p>' if role else ''}
+                    <div style='line-height: 1.8; color: #e6edf3;'>{formatted_response}</div>
+                </div>
+                """
         
         # Format final output with markdown support
-        final_output_formatted = _format_markdown_response(result.get('final_output', ''))
-        
-        html_output += f"""
-        <div style='margin-top: 30px; padding: 20px; background: #0d1117; border-radius: 8px; border: 2px solid #8ab4f8;'>
-            <h2 style='color: #8ab4f8; margin-bottom: 15px;'>📊 Final Output</h2>
-            <div style='line-height: 1.8; color: #e6edf3;'>{final_output_formatted}</div>
-        </div>
-        """
+        final_output = result.get('final_output', '')
+        if final_output:
+            final_output_formatted = _format_markdown_response(final_output)
+            html_output += f"""
+            <div style='margin-top: 30px; padding: 20px; background: #0d1117; border-radius: 8px; border: 2px solid #8ab4f8;'>
+                <h2 style='color: #8ab4f8; margin-bottom: 15px;'>📊 Final Output</h2>
+                <div style='line-height: 1.8; color: #e6edf3;'>{final_output_formatted}</div>
+            </div>
+            """
+        else:
+            html_output += """
+            <div style='margin-top: 30px; padding: 20px; background: #0d1117; border-radius: 8px; border: 2px solid #8ab4f8;'>
+                <h2 style='color: #8ab4f8; margin-bottom: 15px;'>📊 Final Output</h2>
+                <p style='color: #9aa4ad;'><em>No final output generated</em></p>
+            </div>
+            """
         
         html_output += "</div>"
         
@@ -673,9 +725,29 @@ def execute_workflow_handler(
         return "\n".join(text_parts), html_output
         
     except json.JSONDecodeError as e:
-        return f"❌ Invalid JSON: {str(e)}", ""
+        error_html = f"""
+        <div style='padding: 20px; background: #1a1f26; color: #e6edf3;'>
+            <h2 style='color: #ff6b6b;'>❌ Invalid JSON</h2>
+            <p style='color: #9aa4ad;'>{str(e)}</p>
+        </div>
+        """
+        return f"❌ Invalid JSON: {str(e)}", error_html
     except Exception as e:
-        return f"❌ Error executing workflow: {str(e)}", ""
+        import traceback
+        error_details = traceback.format_exc()
+        print(f"Workflow execution error: {error_details}")  # Debug print
+        
+        error_html = f"""
+        <div style='padding: 20px; background: #1a1f26; color: #e6edf3;'>
+            <h2 style='color: #ff6b6b;'>❌ Error Executing Workflow</h2>
+            <p style='color: #9aa4ad;'>{str(e)}</p>
+            <details style='margin-top: 15px;'>
+                <summary style='color: #8ab4f8; cursor: pointer;'>Technical Details</summary>
+                <pre style='background: #0d1117; padding: 10px; border-radius: 5px; margin-top: 10px; font-size: 12px; color: #9aa4ad;'>{error_details}</pre>
+            </details>
+        </div>
+        """
+        return f"❌ Error executing workflow: {str(e)}\n\nTechnical Details:\n{error_details}", error_html
 
 
 def _format_markdown_response(text: str) -> str:
@@ -751,15 +823,33 @@ def _format_markdown_response(text: str) -> str:
     # Join and process remaining formatting
     html_output = '\n'.join(table_rows)
     
-    # Convert code blocks (handle both ``` and ```language)
-    html_output = re.sub(r'```(\w+)?\n(.*?)```', 
-                         r'<pre style="background: #161b22; padding: 15px; border-radius: 5px; border: 1px solid #30363d; overflow-x: auto; margin: 15px 0; font-family: \'Courier New\', monospace;"><code style="color: #e6edf3;">\2</code></pre>', 
-                         html_output, flags=re.DOTALL)
+    # Convert code blocks first (handle both ``` and ```language)
+    # Store code blocks temporarily to protect them from inline code conversion
+    code_block_placeholder = "___CODE_BLOCK_PLACEHOLDER___"
+    code_blocks = []
+    code_block_pattern = r'```(\w+)?\n(.*?)```'
     
-    # Convert inline code (but not inside code blocks)
-    html_output = re.sub(r'(?<!`)(?<!<code[^>]*>)`([^`\n]+)`(?!`)', 
+    def store_code_block(match):
+        code_blocks.append(match.group(0))
+        return f"{code_block_placeholder}{len(code_blocks)-1}{code_block_placeholder}"
+    
+    # Store code blocks
+    html_output = re.sub(code_block_pattern, store_code_block, html_output, flags=re.DOTALL)
+    
+    # Convert inline code (simple pattern, avoiding backticks in code blocks)
+    html_output = re.sub(r'`([^`\n]+)`', 
                         r'<code style="background: #161b22; padding: 2px 6px; border-radius: 3px; color: #ff79c6; font-family: \'Courier New\', monospace;">\1</code>', 
                         html_output)
+    
+    # Restore and convert code blocks to HTML
+    for idx, code_block in enumerate(code_blocks):
+        # Convert the stored code block to HTML
+        code_match = re.match(r'```(\w+)?\n(.*?)```', code_block, re.DOTALL)
+        if code_match:
+            lang = code_match.group(1) or ''
+            code_content = code_match.group(2)
+            code_html = f'<pre style="background: #161b22; padding: 15px; border-radius: 5px; border: 1px solid #30363d; overflow-x: auto; margin: 15px 0; font-family: \'Courier New\', monospace;"><code style="color: #e6edf3;">{code_content}</code></pre>'
+            html_output = html_output.replace(f"{code_block_placeholder}{idx}{code_block_placeholder}", code_html)
     
     # Convert bold (but not inside code)
     html_output = re.sub(r'\*\*([^*]+)\*\*', r'<strong style="color: #ffa500; font-weight: 600;">\1</strong>', html_output)

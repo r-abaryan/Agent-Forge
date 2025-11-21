@@ -134,16 +134,25 @@ Your role: {self.role}
             # Keep it simple and direct to avoid breaking model output
             system_prompt = self._system_prompt.strip()
             
-            # Build clear user message
-            if context.strip():
-                user_message = f"{input_text}\n\nContext: {context.strip()}"
+            # Build clear user message with length limits
+            # Truncate context if too long to avoid overwhelming the model
+            max_context_length = 2000
+            truncated_context = context.strip()[:max_context_length] if len(context.strip()) > max_context_length else context.strip()
+            
+            if truncated_context:
+                user_message = f"{input_text.strip()}\n\nContext: {truncated_context}"
             else:
                 user_message = input_text.strip()
+            
+            # Limit user message length
+            max_user_message = 3000
+            if len(user_message) > max_user_message:
+                user_message = user_message[:max_user_message] + "... [truncated]"
             
             # Use simple, reliable prompt template
             # Avoid complex formatting that might confuse the model
             prompt = ChatPromptTemplate.from_messages([
-                ("system", system_prompt),
+                ("system", system_prompt + "\n\n**Response Guidelines**: Be concise, focused, and relevant. Avoid repetition or verbose disclaimers."),
                 ("human", user_message)
             ])
             
@@ -161,6 +170,36 @@ Your role: {self.role}
                 lines = response_clean.split('\n', 1)
                 if len(lines) > 1:
                     response_clean = lines[1].strip()
+            
+            # Limit response length to prevent excessive output
+            max_response_length = 3000
+            if len(response_clean) > max_response_length:
+                # Try to cut at a sentence boundary
+                truncated = response_clean[:max_response_length]
+                last_period = truncated.rfind('.')
+                last_newline = truncated.rfind('\n')
+                cut_point = max(last_period, last_newline)
+                if cut_point > max_response_length * 0.8:  # Only use if we're not cutting too much
+                    response_clean = response_clean[:cut_point + 1] + "\n\n[Response truncated for length]"
+                else:
+                    response_clean = truncated + "\n\n[Response truncated for length]"
+            
+            # Remove repetitive patterns (simple heuristic)
+            lines = response_clean.split('\n')
+            seen_lines = set()
+            filtered_lines = []
+            for line in lines:
+                line_stripped = line.strip()
+                # Skip if line is too similar to previous ones (simple check)
+                if line_stripped and line_stripped not in seen_lines:
+                    # Add to seen if it's substantial
+                    if len(line_stripped) > 20:
+                        seen_lines.add(line_stripped)
+                    filtered_lines.append(line)
+                elif not line_stripped:
+                    filtered_lines.append(line)  # Keep empty lines for formatting
+            
+            response_clean = '\n'.join(filtered_lines)
             
             return {
                 "agent": self.name,

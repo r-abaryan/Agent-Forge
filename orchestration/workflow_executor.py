@@ -120,16 +120,35 @@ class WorkflowExecutor:
                 # Determine input based on pass mode
                 if pass_mode == "cumulative" and idx > 0:
                     # Include all previous outputs with better formatting
+                    # Truncate each response to avoid overwhelming the model
                     previous_outputs = []
                     for r in results:
                         if r.get('success', False):
                             agent_name = r.get('agent', 'Unknown')
                             response = r.get('response', '')
-                            previous_outputs.append(f"**{agent_name}** ({r.get('role', 'Agent')}):\n{response}")
+                            # Truncate each response to max 500 chars to keep context manageable
+                            if len(response) > 500:
+                                # Try to cut at sentence boundary
+                                truncated = response[:500]
+                                last_period = truncated.rfind('.')
+                                if last_period > 400:
+                                    response = response[:last_period + 1] + " [summary]"
+                                else:
+                                    response = truncated + " [summary]"
+                            previous_outputs.append(f"**{agent_name}**: {response}")
                     
-                    chain_context = "## Previous Agent Results:\n\n" + "\n\n---\n\n".join(previous_outputs)
+                    chain_context = "## Previous Results:\n\n" + "\n\n".join(previous_outputs)
+                    # Limit total context length
+                    max_context = 2000
+                    if len(chain_context) > max_context:
+                        chain_context = chain_context[:max_context] + "\n[Previous results truncated]"
+                    
                     agent_input = initial_input
                     agent_context = f"{context}\n\n{chain_context}" if context else chain_context
+                    
+                    # Final truncation of total context
+                    if len(agent_context) > 2500:
+                        agent_context = agent_context[:2500] + "\n[Context truncated]"
                 
                 elif pass_mode == "sequential" and idx > 0:
                     # Only use previous agent's output, but include original context
