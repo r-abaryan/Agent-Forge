@@ -171,35 +171,59 @@ Your role: {self.role}
                 if len(lines) > 1:
                     response_clean = lines[1].strip()
             
+            # Remove repetitive patterns FIRST (before length check)
+            lines = response_clean.split('\n')
+            seen_lines = set()
+            filtered_lines = []
+            consecutive_duplicates = 0
+            
+            for i, line in enumerate(lines):
+                line_stripped = line.strip().lower()
+                # Check for exact duplicates or very similar lines
+                if line_stripped:
+                    # Check if this line is too similar to recent lines
+                    is_duplicate = False
+                    for seen in list(seen_lines)[-5:]:  # Check last 5 seen lines
+                        if len(line_stripped) > 30 and seen and len(seen) > 30:
+                            # Simple similarity check
+                            words_current = set(line_stripped.split()[:10])
+                            words_seen = set(seen.split()[:10])
+                            if len(words_current & words_seen) > 5:  # More than 5 common words
+                                is_duplicate = True
+                                consecutive_duplicates += 1
+                                break
+                    
+                    if is_duplicate and consecutive_duplicates > 1:
+                        continue  # Skip this duplicate line
+                    elif is_duplicate:
+                        consecutive_duplicates += 1
+                    else:
+                        consecutive_duplicates = 0
+                        if len(line_stripped) > 20:
+                            seen_lines.add(line_stripped)
+                        filtered_lines.append(line)
+                else:
+                    consecutive_duplicates = 0
+                    filtered_lines.append(line)  # Keep empty lines for formatting
+            
+            response_clean = '\n'.join(filtered_lines)
+            
             # Limit response length to prevent excessive output
-            max_response_length = 3000
+            max_response_length = 2000  # Reduced from 3000
             if len(response_clean) > max_response_length:
                 # Try to cut at a sentence boundary
                 truncated = response_clean[:max_response_length]
                 last_period = truncated.rfind('.')
                 last_newline = truncated.rfind('\n')
                 cut_point = max(last_period, last_newline)
-                if cut_point > max_response_length * 0.8:  # Only use if we're not cutting too much
-                    response_clean = response_clean[:cut_point + 1] + "\n\n[Response truncated for length]"
+                if cut_point > max_response_length * 0.7:  # Only use if we're not cutting too much
+                    response_clean = response_clean[:cut_point + 1]
                 else:
-                    response_clean = truncated + "\n\n[Response truncated for length]"
-            
-            # Remove repetitive patterns (simple heuristic)
-            lines = response_clean.split('\n')
-            seen_lines = set()
-            filtered_lines = []
-            for line in lines:
-                line_stripped = line.strip()
-                # Skip if line is too similar to previous ones (simple check)
-                if line_stripped and line_stripped not in seen_lines:
-                    # Add to seen if it's substantial
-                    if len(line_stripped) > 20:
-                        seen_lines.add(line_stripped)
-                    filtered_lines.append(line)
-                elif not line_stripped:
-                    filtered_lines.append(line)  # Keep empty lines for formatting
-            
-            response_clean = '\n'.join(filtered_lines)
+                    response_clean = truncated
+                
+                # Don't add truncation message if we're near the end anyway
+                if len(response_clean) < max_response_length - 100:
+                    response_clean += "\n\n[Response truncated]"
             
             return {
                 "agent": self.name,

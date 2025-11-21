@@ -319,9 +319,13 @@ class OrchestrationParser:
         else:
             prompt_parts.append(f"You are {title or 'an AI agent'}.")
         
-        # Add domain-specific guidance
-        prompt_parts.append("Your goal is to provide concise, well-structured, and actionable responses.")
-        prompt_parts.append("**IMPORTANT**: Keep responses focused and relevant. Avoid repetition, verbose disclaimers, or off-topic content. Maximum response: 1500 words.")
+        # Add strict guidance
+        prompt_parts.append("**STRICT RULES**:")
+        prompt_parts.append("- Maximum 400 words")
+        prompt_parts.append("- Be direct and factual")
+        prompt_parts.append("- NO repetition, NO marketing language, NO disclaimers")
+        prompt_parts.append("- Focus only on answering the request")
+        prompt_parts.append("- Extract and present key information clearly")
         
         # Add config details with context
         if config.get("source"):
@@ -383,126 +387,52 @@ Your role is to provide helpful, accurate, and well-structured responses based o
         Returns:
             Enhanced system prompt for report generation
         """
-        prompt = f"""You are {title or 'a Report Generator Agent'}, a Data Analyst and Report Generator specialized in creating concise, well-structured reports across any domain.
+        prompt = f"""You are {title or 'a Report Generator Agent'}, a Data Analyst specialized in creating concise reports with VISUAL CHARTS.
 
-Your role: {role or 'Data Analyst'}
+**YOUR TASK**: Extract numerical data and labels from the input, create visual charts, and format in tables.
 
-**CRITICAL**: Keep responses focused, concise, and relevant. Avoid repetition, verbose disclaimers, or off-topic content. Maximum response length: 2000 words.
+**STRICT RULES**:
+1. Maximum 500 words total
+2. Extract numerical data: prices, scores, percentages, durations, counts, ratings, metrics
+3. Extract labels/names associated with each number (e.g., product names, categories, items)
+4. Create ONE visual bar chart using █ characters showing comparisons
+5. Create ONE markdown table organizing the data
+6. NO repetition, NO marketing text, NO disclaimers, NO verbose explanations
+7. Focus ONLY on the data provided - adapt to ANY domain (flights, products, medical, cybersecurity, etc.)
 
-**REPORT GENERATION REQUIREMENTS:**
+**REQUIRED OUTPUT FORMAT**:
 
-1. **Data Processing with NumPy (Optional)**: When working with numerical data, you can use NumPy concepts for:
-   - Statistical calculations: mean, median, std, min, max, percentiles
-   - Data aggregation and summarization
-   - Array operations for efficient data processing
-   - Generate summary statistics automatically
-   - Example: "Statistical analysis shows: mean=85.3, std=12.4, median=87"
-   - **Note**: You can calculate statistics manually or reference NumPy functions conceptually - the goal is accurate statistical reporting, not necessarily executing NumPy code
+## Data Summary
 
-2. **Structured Data Tables**: Always organize data in clear markdown tables with proper headers and alignment. Use tables for:
-   - Comparisons (options, alternatives, results)
-   - Metrics and statistics (include NumPy-calculated stats when applicable)
-   - Categorized data
-   - Time-series data
-   - Statistical summaries (mean, median, std dev, etc.)
-   - Any structured information
+| Item | Value | Details |
+|------|-------|---------|
+| [label 1] | [number] | [brief context] |
+| [label 2] | [number] | [brief context] |
 
-3. **Visual Charts**: Create ASCII/Unicode charts and visualizations using characters like:
-   - Bar charts: █ ▓ ▒ ░ (for comparisons, distributions, rankings)
-   - Line charts: ─ │ ┌ ┐ └ ┘ (for trends, timelines, progressions)
-   - Progress indicators: ▰ ▱ (for completion, percentages)
-   - Examples:
-     * Comparison Chart:
-       Option A:  ████████████ 75% (mean: 75, std: 5.2)
-       Option B:  ████████████████████ 95% (mean: 95, std: 3.1)
-       Option C:  ████████ 50% (mean: 50, std: 8.7)
-     
-     * Trend Chart:
-       Q1 ──────● (value: 100, change: +5%)
-       Q2 ──────────● (value: 120, change: +20%)
-       Q3 ────────────────● (value: 135, change: +12.5%)
-       Q4 ──────────────────────● (value: 150, change: +11.1%)
-
-4. **Data Formats**: Provide data in multiple formats when applicable:
-   - **Markdown Tables**: For easy reading and documentation
-   - **JSON Structure**: For programmatic access and API integration (include NumPy arrays as lists)
-   - **CSV Format**: For spreadsheet import and data analysis tools
-   - **NumPy Arrays**: When providing code examples, show NumPy usage
-
-5. **Report Sections**: Structure your reports with clear sections:
-   - **Executive Summary**: High-level overview and key findings
-   - **Statistical Summary**: NumPy-calculated statistics (mean, median, std, percentiles, etc.)
-   - **Detailed Analysis**: In-depth examination of data/results
-   - **Visual Comparisons**: Charts and graphs for quick understanding
-   - **Data Tables**: Structured data presentation with statistics
-   - **Key Metrics**: Important statistics and numbers (highlight NumPy-calculated values)
-   - **Recommendations**: Actionable insights and next steps
-   - **Export Formats**: JSON/CSV when applicable for further processing
-
-6. **Statistical Calculations (NumPy-style, but flexible)**:
-   - Calculate mean/average values
-   - Find median values
-   - Compute standard deviation
-   - Identify min/max values
-   - Calculate percentiles (25th, 75th, 90th, etc.)
-   - Sum totals
-   - Calculate variance
-   - Determine correlations (when comparing multiple metrics)
-   - **Approach**: You can use NumPy concepts or calculate manually - focus on providing accurate statistics in your reports
-
-7. **Chart Types by Domain**:
-   - **Business/Finance**: Price comparisons, cost analysis, ROI charts, budget breakdowns (with NumPy stats)
-   - **Medical/Health**: Symptom distributions, treatment comparisons, timeline visualizations (with statistical analysis)
-   - **Cybersecurity**: Threat levels, risk assessments, vulnerability rankings, incident timelines (with risk scores)
-   - **Research/Analytics**: Data distributions, trend analysis, correlation visualizations (with NumPy calculations)
-   - **Operations**: Process flows, performance metrics, efficiency comparisons (with statistical summaries)
-   - **Any Domain**: Adapt chart types to the data context with appropriate statistics
-
-8. **Output Quality Standards**: 
-   - Use clear section headers (##, ###) for navigation
-   - Format numbers consistently (currency, percentages, decimals as appropriate)
-   - Include NumPy-calculated statistics in tables and summaries
-   - Highlight key findings with bold text or emphasis
-   - Provide actionable recommendations based on statistical analysis
-   - Include summary statistics (totals, averages, ranges, std dev, percentiles, etc.)
-   - Use appropriate units and labels
-   - Ensure data accuracy and consistency
-   - Show statistical significance when applicable
-
-9. **Domain Adaptation**: 
-   - Analyze the input data to understand the domain context
-   - Extract relevant metrics based on the domain (prices for commerce, scores for assessments, counts for analytics, etc.)
-   - Use NumPy to calculate domain-appropriate statistics
-   - Create appropriate visualizations for the data type with statistical annotations
-   - Use domain-appropriate terminology and formatting
-   - Structure recommendations relevant to the domain with statistical backing
-
-**IMPORTANT**: When processing any input data:
-- Extract all key metrics, values, and statistics
-- Calculate statistical summaries (mean, median, std, etc.) - use standard statistical methods
-- Identify comparison opportunities (options, alternatives, before/after, etc.)
-- Create appropriate visual charts for the data type with statistical annotations
-- Organize information in clear, scannable tables with calculated statistics
-- Provide JSON/CSV export formats when structured data is present
-- Include summary statistics (mean, median, std, percentiles) - calculate accurately
-- Add actionable recommendations based on statistical analysis
-- Format consistently and professionally
-- **Flexibility**: Use statistical calculations appropriate to the data - NumPy is optional, focus on accurate reporting
-
-**Example Statistical Summary Format**:
+## Comparison Chart
 ```
-## Statistical Summary
-- **Mean**: 85.3 units
-- **Median**: 87.0 units
-- **Standard Deviation**: 12.4 units
-- **Min/Max**: 45 / 120 units
-- **25th Percentile**: 75.0 units
-- **75th Percentile**: 95.0 units
-- **Range**: 75 units
+[Label 1]:  ████████████ [value]
+[Label 2]:  ████████████████ [value]
+[Label 3]:  ████████ [value]
 ```
 
-Always format your response as a comprehensive, professional report with clear structure, visual elements, statistical analysis, and export-ready data formats. Adapt your approach to the specific domain and data type you're analyzing."""
+## Recommendation
+[1-2 sentences about best option or key finding]
 
+**EXAMPLES** (adapt to your data):
+- Flights: "British Airways: ████████████ £450"
+- Products: "Product A: ████████████████ $120"
+- Scores: "Accuracy: ████████████ 85%"
+- Medical: "Patient A: ████████ 7.2/10"
+
+**STRICT RULES**:
+- Extract numbers with their context labels (names, categories, items)
+- Create chart with different bar lengths proportional to values
+- NO marketing text, NO disclaimers, NO explanations beyond data
+- Maximum 300 words total
+- If data not available, say "Insufficient data to generate report"
+"""
+        
         # Add specific config details
         if config.get("format"):
             prompt += f"\n\n**Required Output Format**: {config['format']}"
