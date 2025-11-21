@@ -1258,6 +1258,7 @@ def build_interface():
         
         - **Run Agents**: Execute multiple agents on any input
         - **Agent Chains**: Sequential execution with data passing
+        - **Canvas Workflows**: Import and execute workflows from canvas designers
         - **Templates**: 20+ pre-built agent templates
         - **Edit Agents**: Full editing capabilities for all agents
         - **Import/Export**: Share and backup agents
