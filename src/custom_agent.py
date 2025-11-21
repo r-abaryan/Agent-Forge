@@ -172,8 +172,21 @@ Your role: {self.role}
                 if len(lines) > 1:
                     response_clean = lines[1].strip()
             
-            # AGGRESSIVE CLEANING: Remove ALL guidelines, metadata, and system prompts
+            # AGGRESSIVE CLEANING: Remove ALL guidelines, metadata, system prompts, and code blocks
             import re
+            
+            # Remove URLs first (they're often repetitive and long)
+            url_pattern = r'https?://[^\s]+'
+            response_clean = re.sub(url_pattern, '', response_clean)
+            
+            # Remove code blocks (```python ... ```, ``` ... ```)
+            code_block_patterns = [
+                r'```[\w]*\n.*?```',  # Markdown code blocks
+                r'```.*?```',  # Any code blocks
+            ]
+            for pattern in code_block_patterns:
+                response_clean = re.sub(pattern, '', response_clean, flags=re.DOTALL | re.MULTILINE)
+            
             patterns_to_remove = [
                 r'Data source:.*?(?=\n|$)',
                 r'Strategy:.*?(?=\n|$)',
@@ -194,7 +207,7 @@ Your role: {self.role}
             for pattern in patterns_to_remove:
                 response_clean = re.sub(pattern, '', response_clean, flags=re.IGNORECASE | re.DOTALL | re.MULTILINE)
             
-            # Remove lines that are just metadata/guidelines
+            # Remove lines that are just metadata/guidelines or code
             lines = response_clean.split('\n')
             filtered_lines = []
             skip_patterns = [
@@ -213,17 +226,41 @@ Your role: {self.role}
                 r'^Human:',
                 r'^## Previous',
             ]
+            # Patterns to detect code lines
+            code_line_patterns = [
+                r'^import\s+',
+                r'^from\s+\w+\s+import',
+                r'^def\s+\w+\s*\(',
+                r'^class\s+\w+',
+                r'^\s*[a-zA-Z_][a-zA-Z0-9_]*\s*=\s*[^=]',  # Variable assignment
+                r'^\s*print\s*\(',
+                r'^\s*return\s+',
+                r'^\s*if\s+.*:',
+                r'^\s*for\s+.*:',
+                r'^\s*while\s+.*:',
+                r'^\s*#.*',  # Comments
+            ]
+            
             for line in lines:
                 line_stripped = line.strip()
                 if not line_stripped:
                     filtered_lines.append(line)
                     continue
+                
                 # Skip if line matches skip patterns
                 should_skip = False
                 for pattern in skip_patterns:
                     if re.match(pattern, line_stripped, re.IGNORECASE):
                         should_skip = True
                         break
+                
+                # Skip if line looks like code
+                if not should_skip:
+                    for code_pattern in code_line_patterns:
+                        if re.match(code_pattern, line_stripped):
+                            should_skip = True
+                            break
+                
                 if not should_skip:
                     filtered_lines.append(line)
             
@@ -232,37 +269,56 @@ Your role: {self.role}
             # Remove repetitive patterns FIRST (before length check)
             lines = response_clean.split('\n')
             seen_lines = set()
+            seen_phrases = set()  # Track longer phrases to catch repetitive content
             filtered_lines = []
             consecutive_duplicates = 0
             
             for i, line in enumerate(lines):
-                line_stripped = line.strip().lower()
-                # Check for exact duplicates or very similar lines
-                if line_stripped:
-                    # Check if this line is too similar to recent lines
-                    is_duplicate = False
-                    for seen in list(seen_lines)[-5:]:  # Check last 5 seen lines
-                        if len(line_stripped) > 30 and seen and len(seen) > 30:
-                            # Simple similarity check
-                            words_current = set(line_stripped.split()[:10])
-                            words_seen = set(seen.split()[:10])
-                            if len(words_current & words_seen) > 5:  # More than 5 common words
+                line_stripped = line.strip()
+                line_lower = line_stripped.lower()
+                
+                if not line_lower:
+                    filtered_lines.append(line)
+                    continue
+                
+                # Check for exact duplicates
+                if line_lower in seen_lines:
+                    consecutive_duplicates += 1
+                    continue  # Skip exact duplicates
+                
+                # Check for very similar lines (for long lines)
+                is_duplicate = False
+                if len(line_lower) > 50:
+                    # For long lines, check if we've seen a very similar phrase
+                    # Extract key phrases (first 100 chars, last 100 chars)
+                    key_phrase = line_lower[:100] + "..." + line_lower[-100:] if len(line_lower) > 200 else line_lower
+                    if key_phrase in seen_phrases:
+                        is_duplicate = True
+                        consecutive_duplicates += 1
+                    else:
+                        seen_phrases.add(key_phrase)
+                
+                # Check similarity with recent lines (for shorter lines)
+                if not is_duplicate and len(line_lower) > 30:
+                    for seen in list(seen_lines)[-10:]:  # Check last 10 seen lines
+                        if seen and len(seen) > 30:
+                            # More aggressive similarity check
+                            words_current = set(line_lower.split()[:15])
+                            words_seen = set(seen.split()[:15])
+                            common_words = words_current & words_seen
+                            # If more than 60% of words are common, consider it duplicate
+                            if len(common_words) > max(5, len(words_current) * 0.6):
                                 is_duplicate = True
                                 consecutive_duplicates += 1
                                 break
-                    
-                    if is_duplicate and consecutive_duplicates > 1:
-                        continue  # Skip this duplicate line
-                    elif is_duplicate:
-                        consecutive_duplicates += 1
-                    else:
-                        consecutive_duplicates = 0
-                        if len(line_stripped) > 20:
-                            seen_lines.add(line_stripped)
-                        filtered_lines.append(line)
+                
+                if is_duplicate and consecutive_duplicates > 0:
+                    continue  # Skip duplicate
                 else:
                     consecutive_duplicates = 0
-                    filtered_lines.append(line)  # Keep empty lines for formatting
+                    if len(line_lower) > 10:
+                        seen_lines.add(line_lower)
+                    filtered_lines.append(line)
             
             response_clean = '\n'.join(filtered_lines)
             

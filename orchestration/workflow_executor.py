@@ -179,10 +179,31 @@ class WorkflowExecutor:
                             agent_name = r.get('agent', 'Unknown')
                             response = r.get('response', '')
                             
+                            # Clean response: remove URLs and repetitive content
+                            import re
+                            # Remove URLs
+                            response = re.sub(r'https?://[^\s]+', '', response)
+                            
+                            # Remove repetitive phrases (catch long repetitive strings)
+                            lines = response.split('\n')
+                            seen_phrases = set()
+                            unique_lines = []
+                            for line in lines:
+                                line_stripped = line.strip()
+                                if not line_stripped:
+                                    continue
+                                # For long lines, check if we've seen similar content
+                                if len(line_stripped) > 50:
+                                    key_phrase = line_stripped[:80] if len(line_stripped) > 80 else line_stripped
+                                    if key_phrase.lower() in seen_phrases:
+                                        continue  # Skip repetitive long lines
+                                    seen_phrases.add(key_phrase.lower())
+                                unique_lines.append(line)
+                            response = '\n'.join(unique_lines)
+                            
                             # Extract key data points (numbers, prices, etc.) for report generators
                             if "report" in agent_config.get("name", "").lower() or "analyst" in agent_config.get("role", "").lower():
                                 # For report generators, extract structured data
-                                import re
                                 # Extract prices, numbers, percentages
                                 prices = re.findall(r'[£$€]\s*[\d,]+', response)
                                 numbers = re.findall(r'\d+\.?\d*\s*(?:hours?|minutes?|%|units?)', response, re.IGNORECASE)
@@ -253,9 +274,22 @@ class WorkflowExecutor:
                     return cleaned.strip()
                 
                 def clean_response_text(text):
-                    """Remove system prompts, guidelines, and agent metadata from responses"""
+                    """Remove system prompts, guidelines, agent metadata, and code blocks from responses"""
                     if not text:
                         return ""
+                    
+                    # Remove URLs first (they're often repetitive and long)
+                    url_pattern = r'https?://[^\s]+'
+                    cleaned = re.sub(url_pattern, '', text)
+                    
+                    # Remove code blocks (```python ... ```, ``` ... ```)
+                    code_block_patterns = [
+                        r'```[\w]*\n.*?```',  # Markdown code blocks
+                        r'```.*?```',  # Any code blocks
+                    ]
+                    for pattern in code_block_patterns:
+                        cleaned = re.sub(pattern, '', cleaned, flags=re.DOTALL | re.MULTILINE)
+                    
                     # Remove common system prompt patterns (more aggressive)
                     patterns_to_remove = [
                         r'Response Guidelines:.*?(?=\n\n|\n[A-Z]|$)',
@@ -280,11 +314,10 @@ class WorkflowExecutor:
                         r'Be direct.*?(?=\n|$)',
                         r'NO repetition.*?(?=\n|$)',
                     ]
-                    cleaned = text
                     for pattern in patterns_to_remove:
                         cleaned = re.sub(pattern, '', cleaned, flags=re.IGNORECASE | re.DOTALL | re.MULTILINE)
                     
-                    # Remove lines that are just guidelines/metadata
+                    # Remove lines that are just guidelines/metadata or code
                     lines = cleaned.split('\n')
                     filtered_lines = []
                     skip_patterns = [
@@ -305,16 +338,40 @@ class WorkflowExecutor:
                         r'^Be direct',
                         r'^NO ',
                     ]
+                    # Patterns to detect code lines
+                    code_line_patterns = [
+                        r'^import\s+',
+                        r'^from\s+\w+\s+import',
+                        r'^def\s+\w+\s*\(',
+                        r'^class\s+\w+',
+                        r'^\s*[a-zA-Z_][a-zA-Z0-9_]*\s*=\s*[^=]',  # Variable assignment
+                        r'^\s*print\s*\(',
+                        r'^\s*return\s+',
+                        r'^\s*if\s+.*:',
+                        r'^\s*for\s+.*:',
+                        r'^\s*while\s+.*:',
+                        r'^\s*#.*',  # Comments
+                    ]
+                    
                     for line in lines:
                         line_stripped = line.strip()
                         if not line_stripped:
                             continue
+                        
                         # Skip if line matches skip patterns
                         should_skip = False
                         for pattern in skip_patterns:
                             if re.match(pattern, line_stripped, re.IGNORECASE):
                                 should_skip = True
                                 break
+                        
+                        # Skip if line looks like code
+                        if not should_skip:
+                            for code_pattern in code_line_patterns:
+                                if re.match(code_pattern, line_stripped):
+                                    should_skip = True
+                                    break
+                        
                         if not should_skip:
                             filtered_lines.append(line)
                     
