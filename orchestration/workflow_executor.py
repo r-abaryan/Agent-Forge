@@ -227,10 +227,111 @@ class WorkflowExecutor:
                     agent_input = current_input
                     agent_context = context
                 
+                # Helper functions for cleaning (defined once per agent iteration)
+                import re
+                
+                def clean_context_for_agent(ctx):
+                    """Remove all metadata and guidelines from context before passing to agent"""
+                    if not ctx:
+                        return ""
+                    # Remove metadata patterns
+                    patterns = [
+                        r'Data source:.*?(?=\n|$)',
+                        r'Strategy:.*?(?=\n|$)',
+                        r'Output format:.*?(?=\n|$)',
+                        r'Focus on:.*?(?=\n|$)',
+                        r'Route:.*?(?=\n|$)',
+                        r'Dates:.*?(?=\n|$)',
+                        r'IMPORTANT:.*?(?=\n\n|\n[A-Z]|$)',
+                        r'Your response should.*?(?=\n\n|\n[A-Z]|$)',
+                        r'Do NOT include.*?(?=\n\n|\n[A-Z]|$)',
+                        r'Be direct.*?(?=\n|$)',
+                    ]
+                    cleaned = ctx
+                    for pattern in patterns:
+                        cleaned = re.sub(pattern, '', cleaned, flags=re.IGNORECASE | re.DOTALL | re.MULTILINE)
+                    return cleaned.strip()
+                
+                def clean_response_text(text):
+                    """Remove system prompts, guidelines, and agent metadata from responses"""
+                    if not text:
+                        return ""
+                    # Remove common system prompt patterns (more aggressive)
+                    patterns_to_remove = [
+                        r'Response Guidelines:.*?(?=\n\n|\n[A-Z]|$)',
+                        r'Data source:.*?(?=\n|$)',
+                        r'Strategy:.*?(?=\n|$)',
+                        r'Output format:.*?(?=\n|$)',
+                        r'Output types:.*?(?=\n|$)',
+                        r'Focus on:.*?(?=\n|$)',
+                        r'Route:.*?(?=\n|$)',
+                        r'Dates:.*?(?=\n|$)',
+                        r'Context:.*?(?=\n\n|$)',
+                        r'## Previous Results:.*?(?=\n\n|$)',
+                        r'\[.*?Agent\]:\s*',
+                        r'Human:.*?(?=\n|$)',
+                        r'\*\*STRICT RULES\*\*:.*?(?=\n\n|$)',
+                        r'\*\*IMPORTANT\*\*:.*?(?=\n\n|$)',
+                        r'IMPORTANT:.*?(?=\n\n|\n[A-Z]|$)',
+                        r'CRITICAL:.*?(?=\n\n|$)',
+                        r'Your response should.*?(?=\n\n|$)',
+                        r'Do NOT include.*?(?=\n\n|$)',
+                        r'Maximum \d+ words.*?(?=\n|$)',
+                        r'Be direct.*?(?=\n|$)',
+                        r'NO repetition.*?(?=\n|$)',
+                    ]
+                    cleaned = text
+                    for pattern in patterns_to_remove:
+                        cleaned = re.sub(pattern, '', cleaned, flags=re.IGNORECASE | re.DOTALL | re.MULTILINE)
+                    
+                    # Remove lines that are just guidelines/metadata
+                    lines = cleaned.split('\n')
+                    filtered_lines = []
+                    skip_patterns = [
+                        r'^Response Guidelines',
+                        r'^Data source',
+                        r'^Strategy',
+                        r'^Output format',
+                        r'^Output types',
+                        r'^Focus on',
+                        r'^Route:',
+                        r'^Dates:',
+                        r'^Context:',
+                        r'^Human:',
+                        r'^IMPORTANT:',
+                        r'^Your response',
+                        r'^Do NOT',
+                        r'^Maximum \d+',
+                        r'^Be direct',
+                        r'^NO ',
+                    ]
+                    for line in lines:
+                        line_stripped = line.strip()
+                        if not line_stripped:
+                            continue
+                        # Skip if line matches skip patterns
+                        should_skip = False
+                        for pattern in skip_patterns:
+                            if re.match(pattern, line_stripped, re.IGNORECASE):
+                                should_skip = True
+                                break
+                        if not should_skip:
+                            filtered_lines.append(line)
+                    
+                    return '\n'.join(filtered_lines).strip()
+                
+                # Clean context before passing to agent
+                agent_context_clean = clean_context_for_agent(agent_context)
+                
                 # Process with agent
                 try:
-                    result_dict = agent.process(agent_input, context=agent_context)
+                    result_dict = agent.process(agent_input, context=agent_context_clean)
                     result_dict["step"] = idx + 1
+                    
+                    # Clean response immediately after generation
+                    response_raw = result_dict.get('response', '')
+                    if response_raw:
+                        result_dict['response'] = clean_response_text(response_raw)
                     
                     # Post-process report generator responses to ensure charts are included
                     if ("report" in agent_name.lower() or "analyst" in agent_config.get("role", "").lower() or 
@@ -242,73 +343,7 @@ class WorkflowExecutor:
                         if not has_charts and response:
                             # Generic data extraction from ALL previous agent outputs
                             # Similar to JavaScript extractChartData function - works for ANY scenario
-                            import re
-                            
-                            def clean_response_text(text):
-                                """Remove system prompts, guidelines, and agent metadata from responses"""
-                                if not text:
-                                    return ""
-                                
-                                # Remove common system prompt patterns (more aggressive)
-                                patterns_to_remove = [
-                                    r'Response Guidelines:.*?(?=\n\n|\n[A-Z]|$)',
-                                    r'Data source:.*?(?=\n|$)',
-                                    r'Strategy:.*?(?=\n|$)',
-                                    r'Output format:.*?(?=\n|$)',
-                                    r'Output types:.*?(?=\n|$)',
-                                    r'Focus on:.*?(?=\n|$)',
-                                    r'Route:.*?(?=\n|$)',
-                                    r'Dates:.*?(?=\n|$)',
-                                    r'Context:.*?(?=\n\n|$)',
-                                    r'## Previous Results:.*?(?=\n\n|$)',
-                                    r'\[.*?Agent\]:\s*',
-                                    r'Human:.*?(?=\n|$)',
-                                    r'\*\*STRICT RULES\*\*:.*?(?=\n\n|$)',
-                                    r'\*\*IMPORTANT\*\*:.*?(?=\n\n|$)',
-                                    r'CRITICAL:.*?(?=\n\n|$)',
-                                    r'Your response should.*?(?=\n\n|$)',
-                                    r'Do NOT include.*?(?=\n\n|$)',
-                                    r'Maximum \d+ words.*?(?=\n|$)',
-                                    r'Be direct.*?(?=\n|$)',
-                                    r'NO repetition.*?(?=\n|$)',
-                                ]
-                                cleaned = text
-                                for pattern in patterns_to_remove:
-                                    cleaned = re.sub(pattern, '', cleaned, flags=re.IGNORECASE | re.DOTALL | re.MULTILINE)
-                                
-                                # Remove lines that are just guidelines/metadata
-                                lines = cleaned.split('\n')
-                                filtered_lines = []
-                                skip_patterns = [
-                                    r'^Response Guidelines',
-                                    r'^Data source',
-                                    r'^Strategy',
-                                    r'^Output format',
-                                    r'^Focus on',
-                                    r'^Route:',
-                                    r'^Dates:',
-                                    r'^Context:',
-                                    r'^Human:',
-                                    r'^Maximum \d+',
-                                    r'^Be direct',
-                                    r'^NO ',
-                                    r'^Your response',
-                                    r'^Do NOT',
-                                ]
-                                for line in lines:
-                                    line_stripped = line.strip()
-                                    if not line_stripped:
-                                        continue
-                                    # Skip if line matches skip patterns
-                                    should_skip = False
-                                    for pattern in skip_patterns:
-                                        if re.match(pattern, line_stripped, re.IGNORECASE):
-                                            should_skip = True
-                                            break
-                                    if not should_skip:
-                                        filtered_lines.append(line)
-                                
-                                return '\n'.join(filtered_lines).strip()
+                            # clean_response_text is already defined above
                             
                             # Collect and clean all text from current and previous responses
                             all_text = clean_response_text(response)

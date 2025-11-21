@@ -163,7 +163,7 @@ Your role: {self.role}
             # Invoke chain with empty dict (all variables in template)
             response = chain.invoke({})
             
-            # Clean response: remove common artifacts
+            # Clean response: remove common artifacts and ALL guidelines/metadata
             response_clean = response.strip()
             
             # Remove any accidental prompt echoes at start
@@ -171,6 +171,63 @@ Your role: {self.role}
                 lines = response_clean.split('\n', 1)
                 if len(lines) > 1:
                     response_clean = lines[1].strip()
+            
+            # AGGRESSIVE CLEANING: Remove ALL guidelines, metadata, and system prompts
+            import re
+            patterns_to_remove = [
+                r'Data source:.*?(?=\n|$)',
+                r'Strategy:.*?(?=\n|$)',
+                r'Output format:.*?(?=\n|$)',
+                r'Output types:.*?(?=\n|$)',
+                r'Focus on:.*?(?=\n|$)',
+                r'Route:.*?(?=\n|$)',
+                r'Dates:.*?(?=\n|$)',
+                r'IMPORTANT:.*?(?=\n\n|\n[A-Z]|$)',
+                r'Your response should.*?(?=\n\n|\n[A-Z]|$)',
+                r'Do NOT include.*?(?=\n\n|\n[A-Z]|$)',
+                r'Be direct.*?(?=\n|$)',
+                r'Context:.*?(?=\n\n|$)',
+                r'## Previous Results:.*?(?=\n\n|$)',
+                r'\[.*?Agent\]:\s*',
+                r'Human:.*?(?=\n|$)',
+            ]
+            for pattern in patterns_to_remove:
+                response_clean = re.sub(pattern, '', response_clean, flags=re.IGNORECASE | re.DOTALL | re.MULTILINE)
+            
+            # Remove lines that are just metadata/guidelines
+            lines = response_clean.split('\n')
+            filtered_lines = []
+            skip_patterns = [
+                r'^Data source',
+                r'^Strategy',
+                r'^Output format',
+                r'^Output types',
+                r'^Focus on',
+                r'^Route:',
+                r'^Dates:',
+                r'^IMPORTANT:',
+                r'^Your response',
+                r'^Do NOT',
+                r'^Be direct',
+                r'^Context:',
+                r'^Human:',
+                r'^## Previous',
+            ]
+            for line in lines:
+                line_stripped = line.strip()
+                if not line_stripped:
+                    filtered_lines.append(line)
+                    continue
+                # Skip if line matches skip patterns
+                should_skip = False
+                for pattern in skip_patterns:
+                    if re.match(pattern, line_stripped, re.IGNORECASE):
+                        should_skip = True
+                        break
+                if not should_skip:
+                    filtered_lines.append(line)
+            
+            response_clean = '\n'.join(filtered_lines).strip()
             
             # Remove repetitive patterns FIRST (before length check)
             lines = response_clean.split('\n')
