@@ -246,7 +246,10 @@ class WorkflowExecutor:
                             
                             def clean_response_text(text):
                                 """Remove system prompts, guidelines, and agent metadata from responses"""
-                                # Remove common system prompt patterns
+                                if not text:
+                                    return ""
+                                
+                                # Remove common system prompt patterns (more aggressive)
                                 patterns_to_remove = [
                                     r'Response Guidelines:.*?(?=\n\n|\n[A-Z]|$)',
                                     r'Data source:.*?(?=\n|$)',
@@ -260,11 +263,52 @@ class WorkflowExecutor:
                                     r'## Previous Results:.*?(?=\n\n|$)',
                                     r'\[.*?Agent\]:\s*',
                                     r'Human:.*?(?=\n|$)',
+                                    r'\*\*STRICT RULES\*\*:.*?(?=\n\n|$)',
+                                    r'\*\*IMPORTANT\*\*:.*?(?=\n\n|$)',
+                                    r'CRITICAL:.*?(?=\n\n|$)',
+                                    r'Your response should.*?(?=\n\n|$)',
+                                    r'Do NOT include.*?(?=\n\n|$)',
+                                    r'Maximum \d+ words.*?(?=\n|$)',
+                                    r'Be direct.*?(?=\n|$)',
+                                    r'NO repetition.*?(?=\n|$)',
                                 ]
                                 cleaned = text
                                 for pattern in patterns_to_remove:
-                                    cleaned = re.sub(pattern, '', cleaned, flags=re.IGNORECASE | re.DOTALL)
-                                return cleaned.strip()
+                                    cleaned = re.sub(pattern, '', cleaned, flags=re.IGNORECASE | re.DOTALL | re.MULTILINE)
+                                
+                                # Remove lines that are just guidelines/metadata
+                                lines = cleaned.split('\n')
+                                filtered_lines = []
+                                skip_patterns = [
+                                    r'^Response Guidelines',
+                                    r'^Data source',
+                                    r'^Strategy',
+                                    r'^Output format',
+                                    r'^Focus on',
+                                    r'^Route:',
+                                    r'^Dates:',
+                                    r'^Context:',
+                                    r'^Human:',
+                                    r'^Maximum \d+',
+                                    r'^Be direct',
+                                    r'^NO ',
+                                    r'^Your response',
+                                    r'^Do NOT',
+                                ]
+                                for line in lines:
+                                    line_stripped = line.strip()
+                                    if not line_stripped:
+                                        continue
+                                    # Skip if line matches skip patterns
+                                    should_skip = False
+                                    for pattern in skip_patterns:
+                                        if re.match(pattern, line_stripped, re.IGNORECASE):
+                                            should_skip = True
+                                            break
+                                    if not should_skip:
+                                        filtered_lines.append(line)
+                                
+                                return '\n'.join(filtered_lines).strip()
                             
                             # Collect and clean all text from current and previous responses
                             all_text = clean_response_text(response)
@@ -322,14 +366,22 @@ class WorkflowExecutor:
                                     data_points.append({'label': label, 'value': value, 'unit': '%'})
                             
                             # Pattern 3: Colon-separated labels (e.g., "Price: 150", "Score: 8.5", "British Airways: £450")
-                            for match in re.finditer(r'([A-Z][A-Za-z\s]{2,30}):\s*(\d+\.?\d*)', all_text):
+                            # More flexible pattern to catch various formats
+                            for match in re.finditer(r'([A-Z][A-Za-z\s]{2,40}):\s*([£$€]?\s*\d+\.?\d*)', all_text):
                                 label = match.group(1).strip()
-                                value = float(match.group(2))
+                                value_str = match.group(2).strip()
+                                # Extract number and currency
+                                num_match = re.search(r'(\d+\.?\d*)', value_str)
+                                if not num_match:
+                                    continue
+                                value = float(num_match.group(1))
                                 if is_valid_label(label) and value > 0:
                                     unit = ''
-                                    # Check if there's a currency symbol nearby
-                                    if re.search(r'[£$€]', all_text[max(0, match.start()-10):match.end()+10]):
-                                        unit = re.search(r'([£$€])', all_text[max(0, match.start()-10):match.end()+10]).group(1)
+                                    # Check if there's a currency symbol in the value
+                                    if re.search(r'[£$€]', value_str):
+                                        unit = re.search(r'([£$€])', value_str).group(1)
+                                    elif '%' in value_str:
+                                        unit = '%'
                                     data_points.append({'label': label, 'value': value, 'unit': unit})
                             
                             # Pattern 4: Table structures (markdown tables)
@@ -349,7 +401,29 @@ class WorkflowExecutor:
                                     if value > 0:
                                         data_points.append({'label': label_cell, 'value': value, 'unit': unit})
                             
-                            # Pattern 5: Generic numbers with meaningful context (fallback)
+                            # Pattern 5: Look for structured data patterns (e.g., "from £450", "costs $120", "rated 8.5")
+                            structured_patterns = [
+                                (r'(?:from|costs?|priced?|pays?|worth)\s+([£$€])\s*(\d+\.?\d*)', 1, 2),  # "from £450"
+                                (r'([£$€])\s*(\d+\.?\d*)\s+(?:for|each|per)', 1, 2),  # "£450 for"
+                                (r'rated\s+(\d+\.?\d*)\s*(?:out of|/|\%)', 1, None),  # "rated 8.5/10"
+                                (r'(\d+\.?\d*)\s*(?:hours?|hrs?|minutes?|mins?)\s+(?:duration|flight|trip)', 1, None),  # "2.5 hours duration"
+                            ]
+                            for pattern, value_group, unit_group in structured_patterns:
+                                for match in re.finditer(pattern, all_text, re.IGNORECASE):
+                                    if unit_group:
+                                        value = float(match.group(value_group))
+                                        unit = match.group(unit_group) if unit_group else ''
+                                    else:
+                                        value = float(match.group(value_group))
+                                        unit = ''
+                                    context_start = max(0, match.start() - 60)
+                                    context_end = min(len(all_text), match.end() + 40)
+                                    context = all_text[context_start:context_end]
+                                    label = _extract_label_from_context(context)
+                                    if label and is_valid_label(label) and value > 0:
+                                        data_points.append({'label': label, 'value': value, 'unit': unit})
+                            
+                            # Pattern 6: Generic numbers with meaningful context (fallback - only if we still don't have enough)
                             if len(data_points) < 2:
                                 for match in re.finditer(r'\b(\d+\.?\d*)\b', all_text):
                                     value = float(match.group(1))

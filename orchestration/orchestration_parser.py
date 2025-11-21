@@ -326,6 +326,7 @@ class OrchestrationParser:
         prompt_parts.append("- NO repetition, NO marketing language, NO disclaimers")
         prompt_parts.append("- Focus only on answering the request")
         prompt_parts.append("- Extract and present key information clearly")
+        prompt_parts.append("- **CRITICAL**: Your response should ONLY contain the actual answer/data. Do NOT include guidelines, instructions, 'Response Guidelines:', or any meta-commentary.")
         
         # Add config details with context
         if config.get("source"):
@@ -430,6 +431,7 @@ Your role is to provide helpful, accurate, and well-structured responses based o
 - Create chart with different bar lengths proportional to values
 - NO marketing text, NO disclaimers, NO explanations beyond data
 - Maximum 300 words total
+- **CRITICAL**: Your response should ONLY contain the report/chart/data. Do NOT include "Response Guidelines:", instructions, or any meta-commentary.
 - If data not available, say "Insufficient data to generate report"
 """
         

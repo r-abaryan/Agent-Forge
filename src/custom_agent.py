@@ -151,8 +151,9 @@ Your role: {self.role}
             
             # Use simple, reliable prompt template
             # Avoid complex formatting that might confuse the model
+            # CRITICAL: Do NOT include "Response Guidelines" in output - agents should NOT echo this
             prompt = ChatPromptTemplate.from_messages([
-                ("system", system_prompt + "\n\n**Response Guidelines**: Be concise, focused, and relevant. Avoid repetition or verbose disclaimers."),
+                ("system", system_prompt + "\n\n**IMPORTANT**: Your response should ONLY contain the actual answer/data. Do NOT include any guidelines, instructions, or meta-commentary in your response. Be direct and factual."),
                 ("human", user_message)
             ])
             
