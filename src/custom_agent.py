@@ -7,6 +7,10 @@ from typing import Dict, Any
 from .base_agent import BaseAgent
 import re
 
+# Pre-compile commonly used regex patterns for better performance
+_URL_PATTERN = re.compile(r'https?://[^\s]+')
+_CODE_BLOCK_PATTERN = re.compile(r'```[\w]*\n.*?```|```.*?```', re.DOTALL | re.MULTILINE)
+
 
 class CustomAgent(BaseAgent):
     """
@@ -173,19 +177,11 @@ Your role: {self.role}
                     response_clean = lines[1].strip()
             
             # AGGRESSIVE CLEANING: Remove ALL guidelines, metadata, system prompts, and code blocks
-            import re
+            # Remove URLs first (they're often repetitive and long) - use pre-compiled pattern
+            response_clean = _URL_PATTERN.sub('', response_clean)
             
-            # Remove URLs first (they're often repetitive and long)
-            url_pattern = r'https?://[^\s]+'
-            response_clean = re.sub(url_pattern, '', response_clean)
-            
-            # Remove code blocks (```python ... ```, ``` ... ```)
-            code_block_patterns = [
-                r'```[\w]*\n.*?```',  # Markdown code blocks
-                r'```.*?```',  # Any code blocks
-            ]
-            for pattern in code_block_patterns:
-                response_clean = re.sub(pattern, '', response_clean, flags=re.DOTALL | re.MULTILINE)
+            # Remove code blocks - use pre-compiled pattern
+            response_clean = _CODE_BLOCK_PATTERN.sub('', response_clean)
             
             patterns_to_remove = [
                 r'Data source:.*?(?=\n|$)',
@@ -267,13 +263,15 @@ Your role: {self.role}
             response_clean = '\n'.join(filtered_lines).strip()
             
             # Remove repetitive patterns FIRST (before length check)
+            # Use a sliding window approach for better efficiency
             lines = response_clean.split('\n')
             seen_lines = set()
             seen_phrases = set()  # Track longer phrases to catch repetitive content
             filtered_lines = []
-            consecutive_duplicates = 0
+            recent_lines = []  # Sliding window of recent lines (max 20)
+            MAX_RECENT = 20
             
-            for i, line in enumerate(lines):
+            for line in lines:
                 line_stripped = line.strip()
                 line_lower = line_stripped.lower()
                 
@@ -283,7 +281,6 @@ Your role: {self.role}
                 
                 # Check for exact duplicates
                 if line_lower in seen_lines:
-                    consecutive_duplicates += 1
                     continue  # Skip exact duplicates
                 
                 # Check for very similar lines (for long lines)
@@ -294,13 +291,12 @@ Your role: {self.role}
                     key_phrase = line_lower[:100] + "..." + line_lower[-100:] if len(line_lower) > 200 else line_lower
                     if key_phrase in seen_phrases:
                         is_duplicate = True
-                        consecutive_duplicates += 1
                     else:
                         seen_phrases.add(key_phrase)
                 
-                # Check similarity with recent lines (for shorter lines)
+                # Check similarity with recent lines only (more efficient than checking all)
                 if not is_duplicate and len(line_lower) > 30:
-                    for seen in list(seen_lines)[-10:]:  # Check last 10 seen lines
+                    for seen in recent_lines:  # Only check recent lines
                         if seen and len(seen) > 30:
                             # More aggressive similarity check
                             words_current = set(line_lower.split()[:15])
@@ -309,15 +305,15 @@ Your role: {self.role}
                             # If more than 60% of words are common, consider it duplicate
                             if len(common_words) > max(5, len(words_current) * 0.6):
                                 is_duplicate = True
-                                consecutive_duplicates += 1
                                 break
                 
-                if is_duplicate and consecutive_duplicates > 0:
-                    continue  # Skip duplicate
-                else:
-                    consecutive_duplicates = 0
+                if not is_duplicate:
                     if len(line_lower) > 10:
                         seen_lines.add(line_lower)
+                        # Maintain sliding window
+                        recent_lines.append(line_lower)
+                        if len(recent_lines) > MAX_RECENT:
+                            recent_lines.pop(0)
                     filtered_lines.append(line)
             
             response_clean = '\n'.join(filtered_lines)

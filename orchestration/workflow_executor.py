@@ -3,6 +3,7 @@ Workflow Executor - Execute parsed workflows using AgentForge agents
 """
 
 import sys
+import re
 from pathlib import Path
 from typing import Dict, List, Any, Optional
 
@@ -12,6 +13,22 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from .orchestration_parser import OrchestrationParser
 from src.agent_manager import AgentManager
 from src.custom_agent import CustomAgent
+
+# Pre-compile commonly used regex patterns for better performance
+_URL_PATTERN = re.compile(r'https?://[^\s]+')
+_CODE_BLOCK_PATTERN = re.compile(r'```[\w]*\n.*?```|```.*?```', re.DOTALL | re.MULTILINE)
+_METADATA_PATTERNS = [
+    re.compile(r'Data source:.*?(?=\n|$)', re.IGNORECASE | re.DOTALL | re.MULTILINE),
+    re.compile(r'Strategy:.*?(?=\n|$)', re.IGNORECASE | re.DOTALL | re.MULTILINE),
+    re.compile(r'Output format:.*?(?=\n|$)', re.IGNORECASE | re.DOTALL | re.MULTILINE),
+    re.compile(r'Focus on:.*?(?=\n|$)', re.IGNORECASE | re.DOTALL | re.MULTILINE),
+    re.compile(r'Route:.*?(?=\n|$)', re.IGNORECASE | re.DOTALL | re.MULTILINE),
+    re.compile(r'Dates:.*?(?=\n|$)', re.IGNORECASE | re.DOTALL | re.MULTILINE),
+    re.compile(r'IMPORTANT:.*?(?=\n\n|\n[A-Z]|$)', re.IGNORECASE | re.DOTALL | re.MULTILINE),
+    re.compile(r'Your response should.*?(?=\n\n|\n[A-Z]|$)', re.IGNORECASE | re.DOTALL | re.MULTILINE),
+    re.compile(r'Do NOT include.*?(?=\n\n|\n[A-Z]|$)', re.IGNORECASE | re.DOTALL | re.MULTILINE),
+    re.compile(r'Be direct.*?(?=\n|$)', re.IGNORECASE | re.DOTALL | re.MULTILINE),
+]
 
 
 def _extract_label_from_context(context: str) -> Optional[str]:
@@ -255,22 +272,10 @@ class WorkflowExecutor:
                     """Remove all metadata and guidelines from context before passing to agent"""
                     if not ctx:
                         return ""
-                    # Remove metadata patterns
-                    patterns = [
-                        r'Data source:.*?(?=\n|$)',
-                        r'Strategy:.*?(?=\n|$)',
-                        r'Output format:.*?(?=\n|$)',
-                        r'Focus on:.*?(?=\n|$)',
-                        r'Route:.*?(?=\n|$)',
-                        r'Dates:.*?(?=\n|$)',
-                        r'IMPORTANT:.*?(?=\n\n|\n[A-Z]|$)',
-                        r'Your response should.*?(?=\n\n|\n[A-Z]|$)',
-                        r'Do NOT include.*?(?=\n\n|\n[A-Z]|$)',
-                        r'Be direct.*?(?=\n|$)',
-                    ]
+                    # Use pre-compiled patterns for better performance
                     cleaned = ctx
-                    for pattern in patterns:
-                        cleaned = re.sub(pattern, '', cleaned, flags=re.IGNORECASE | re.DOTALL | re.MULTILINE)
+                    for pattern in _METADATA_PATTERNS:
+                        cleaned = pattern.sub('', cleaned)
                     return cleaned.strip()
                 
                 def clean_response_text(text):
@@ -278,17 +283,11 @@ class WorkflowExecutor:
                     if not text:
                         return ""
                     
-                    # Remove URLs first (they're often repetitive and long)
-                    url_pattern = r'https?://[^\s]+'
-                    cleaned = re.sub(url_pattern, '', text)
+                    # Remove URLs first (they're often repetitive and long) - use pre-compiled pattern
+                    cleaned = _URL_PATTERN.sub('', text)
                     
-                    # Remove code blocks (```python ... ```, ``` ... ```)
-                    code_block_patterns = [
-                        r'```[\w]*\n.*?```',  # Markdown code blocks
-                        r'```.*?```',  # Any code blocks
-                    ]
-                    for pattern in code_block_patterns:
-                        cleaned = re.sub(pattern, '', cleaned, flags=re.DOTALL | re.MULTILINE)
+                    # Remove code blocks - use pre-compiled pattern
+                    cleaned = _CODE_BLOCK_PATTERN.sub('', cleaned)
                     
                     # Remove common system prompt patterns (more aggressive)
                     patterns_to_remove = [
