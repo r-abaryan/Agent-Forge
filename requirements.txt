@@ -16,8 +16,15 @@ gradio>=4.0.0
 # Utilities
 numpy>=1.24.0
 
-# Optional: For advanced RAG with vector embeddings (future enhancement)
-# sentence-transformers>=2.2.0
-# faiss-cpu>=1.7.4  # or faiss-gpu for GPU support
-# chromadb>=0.4.0
+# Vector-based RAG
+sentence-transformers>=2.2.0
+chromadb>=0.4.0
+
+# REST API
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
+python-multipart>=0.0.6
+pydantic>=2.0.0
+python-jose[cryptography]>=3.3.0
+passlib[bcrypt]>=1.7.4
 

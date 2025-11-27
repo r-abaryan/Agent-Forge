@@ -1,5 +1,6 @@
 """
 RAG Integration - Knowledge base retrieval for agents
+Now supports both simple keyword search and vector-based semantic search
 """
 
 import os
@@ -7,23 +8,53 @@ from pathlib import Path
 from typing import List, Dict, Optional, Any
 import json
 
+try:
+    from src.vector_store import VectorStoreManager
+    VECTOR_SEARCH_AVAILABLE = True
+except ImportError:
+    VECTOR_SEARCH_AVAILABLE = False
+    print("Warning: Vector search not available. Install chromadb and sentence-transformers for semantic search.")
+
 
 class SimpleRAG:
     """
-    Simple RAG (Retrieval Augmented Generation) system.
-    Uses basic text search - can be upgraded to vector embeddings later.
+    RAG (Retrieval Augmented Generation) system.
+    Supports both simple keyword search and vector-based semantic search.
     """
     
-    def __init__(self, knowledge_base_dir: str = "knowledge_base"):
+    def __init__(
+        self, 
+        knowledge_base_dir: str = "knowledge_base",
+        use_vector_search: bool = True,
+        vector_store_dir: str = "vector_store"
+    ):
         """
         Initialize RAG system.
         
         Args:
             knowledge_base_dir: Directory containing knowledge files
+            use_vector_search: Whether to use vector-based semantic search
+            vector_store_dir: Directory for vector database
         """
         self.knowledge_base_dir = Path(knowledge_base_dir)
+        self.use_vector_search = use_vector_search and VECTOR_SEARCH_AVAILABLE
         self._ensure_kb_dir()
         self.documents = []
+        
+        # Initialize vector store if enabled
+        self.vector_store = None
+        if self.use_vector_search:
+            try:
+                self.vector_store = VectorStoreManager(
+                    persist_directory=vector_store_dir,
+                    collection_name="knowledge_base"
+                )
+                print("Vector-based semantic search enabled!")
+            except Exception as e:
+                print(f"Could not initialize vector store: {e}")
+                print("Falling back to keyword search")
+                self.use_vector_search = False
+        
         self.load_knowledge_base()
     
     def _ensure_kb_dir(self):
@@ -118,7 +149,7 @@ Add text files (.txt, .md) or JSON files here for RAG retrieval.
     def search(self, query: str, top_k: int = 3) -> List[Dict[str, Any]]:
         """
         Search knowledge base for relevant documents.
-        Uses simple keyword matching - can be upgraded to embeddings.
+        Uses vector-based semantic search if available, otherwise keyword matching.
         
         Args:
             query: Search query
@@ -130,6 +161,32 @@ Add text files (.txt, .md) or JSON files here for RAG retrieval.
         if not self.documents:
             return []
         
+        # Use vector search if available
+        if self.use_vector_search and self.vector_store:
+            try:
+                vector_results = self.vector_store.search(query, top_k=top_k)
+                
+                # Convert to standard format
+                results = []
+                for vr in vector_results:
+                    # Find matching document
+                    matching_doc = next(
+                        (doc for doc in self.documents if doc.get('filename') == vr['id']),
+                        None
+                    )
+                    
+                    if matching_doc:
+                        results.append({
+                            **matching_doc,
+                            "relevance_score": 1.0 - vr['distance'],  # Convert distance to similarity
+                            "search_method": "vector"
+                        })
+                
+                return results
+            except Exception as e:
+                print(f"Vector search failed, falling back to keyword search: {e}")
+        
+        # Fallback to keyword search
         query_lower = query.lower()
         query_terms = set(query_lower.split())
         
@@ -150,7 +207,8 @@ Add text files (.txt, .md) or JSON files here for RAG retrieval.
             if score > 0:
                 results.append({
                     **doc,
-                    "relevance_score": score
+                    "relevance_score": score,
+                    "search_method": "keyword"
                 })
         
         # Sort by relevance and return top_k
@@ -224,6 +282,20 @@ Add text files (.txt, .md) or JSON files here for RAG retrieval.
             
             with open(file_path, 'w', encoding='utf-8') as f:
                 json.dump(doc_data, f, indent=2, ensure_ascii=False)
+            
+            # Add to vector store if enabled
+            if self.use_vector_search and self.vector_store:
+                try:
+                    meta = metadata or {}
+                    meta['title'] = title
+                    meta['filename'] = filename
+                    self.vector_store.add_document(
+                        doc_id=filename,
+                        content=content,
+                        metadata=meta
+                    )
+                except Exception as e:
+                    print(f"Warning: Could not add to vector store: {e}")
             
             # Reload knowledge base
             self.load_knowledge_base()
