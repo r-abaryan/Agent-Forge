@@ -199,6 +199,9 @@ Your role: {self.role}
                 r'## Previous Results:.*?(?=\n\n|$)',
                 r'\[.*?Agent\]:\s*',
                 r'Human:.*?(?=\n|$)',
+                r'\*\*Role:\*\*.*?(?=\n|$)',
+                r'Role:.*?(?=\n|$)',
+                r'^- .*?(?:focused on|Using|Checking|Adapting|Encouraging|Providing).*?$',
             ]
             for pattern in patterns_to_remove:
                 response_clean = re.sub(pattern, '', response_clean, flags=re.IGNORECASE | re.DOTALL | re.MULTILINE)
@@ -221,6 +224,11 @@ Your role: {self.role}
                 r'^Context:',
                 r'^Human:',
                 r'^## Previous',
+                r'^\*\*Role:',
+                r'^Role:',
+                r'^- .*?(?:Breaking down|Using|Checking|Adapting|Encouraging|Providing)',
+                r'^- .*?(?:focused on|clear explanations)',
+                r'^Explain concepts',
             ]
             # Patterns to detect code lines
             code_line_patterns = [
