@@ -76,7 +76,7 @@ def initialize(model_path: str = DEFAULT_MODEL):
     agent_manager = AgentManager(storage_dir="custom_agents")
     history_manager = HistoryManager(history_dir="history")
     agent_chain = AgentChain(agent_manager, llm)
-    rag_system = SimpleRAG(knowledge_base_dir="knowledge_base")
+    rag_system = SimpleRAG(knowledge_base_dir="knowledge_base", use_vector_search=True)
     
     # Initialize workflow executor (needs agent_manager and llm)
     global workflow_executor
