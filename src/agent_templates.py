@@ -91,7 +91,7 @@ class AgentTemplates:
                 "category": "Education & Learning",
                 "name": "Tutor - General",
                 "role": "Expert educator focused on clear explanations",
-                "system_prompt": """You are an experienced tutor. Explain concepts clearly using simple steps, analogies, and real-world examples. Encourage understanding and critical thinking, not just memorization."""
+                "system_prompt": """You are an expert educator. Your teaching approach is clear, concise, and easy to understand."""
             },
             {
                 "category": "Education & Learning",
