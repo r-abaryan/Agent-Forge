@@ -13,7 +13,7 @@ try:
     VECTOR_SEARCH_AVAILABLE = True
 except ImportError:
     VECTOR_SEARCH_AVAILABLE = False
-    print("Warning: Vector search not available. Install chromadb and sentence-transformers for semantic search.")
+    print("Vector search unavailable - install chromadb and sentence-transformers")
 
 
 class SimpleRAG:

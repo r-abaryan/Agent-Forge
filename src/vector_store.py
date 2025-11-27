@@ -45,20 +45,20 @@ class VectorStoreManager:
         )
         
         # Initialize embedding model
-        print(f"Loading embedding model: {embedding_model}...")
+        print(f"Loading {embedding_model}...")
         self.embedding_model = SentenceTransformer(embedding_model)
-        print("Embedding model loaded successfully!")
+        print("Model ready")
         
         # Get or create collection
         try:
             self.collection = self.client.get_collection(name=collection_name)
-            print(f"Loaded existing collection: {collection_name}")
+            print(f"Collection '{collection_name}' loaded")
         except:
             self.collection = self.client.create_collection(
                 name=collection_name,
                 metadata={"description": "AgentForge knowledge base"}
             )
-            print(f"Created new collection: {collection_name}")
+            print(f"Collection '{collection_name}' created")
     
     def add_document(
         self,
