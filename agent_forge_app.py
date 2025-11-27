@@ -496,6 +496,7 @@ def get_kb_stats() -> str:
     parts = ["# Knowledge Base\n"]
     parts.append(f"**Total Documents:** {stats['total_documents']}")
     parts.append(f"**Total Characters:** {stats['total_characters']:,}")
+    parts.append(f"**Search Mode:** {'Vector (Semantic)' if rag_system.use_vector_search else 'Keyword'}")
     parts.append(f"\n## Document Types")
     for doc_type, count in stats['document_types'].items():
         parts.append(f"- {doc_type}: {count}")
@@ -967,7 +968,7 @@ def build_interface():
                         gr.Markdown("""
                         **Features:**
                         - Select multiple agents for diverse perspectives
-                        - Enable RAG for knowledge-enhanced responses
+                        - RAG uses vector-based semantic search
                         - All runs are saved to history
                         
                         **Tips:**
