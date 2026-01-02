@@ -27,6 +27,8 @@ class AgentManager:
         """
         self.storage_dir = Path(storage_dir)
         self._ensure_storage_dir()
+        # Cache for agent data to reduce file I/O
+        self._agent_data_cache: Dict[str, Dict] = {}
     
     def _ensure_storage_dir(self):
         """Create storage directory if it doesn't exist"""
@@ -66,6 +68,9 @@ class AgentManager:
             # Atomic rename
             temp_path.replace(file_path)
             
+            # Update cache
+            self._agent_data_cache[safe_name] = agent_data
+            
             return True
             
         except Exception as e:
@@ -74,7 +79,7 @@ class AgentManager:
     
     def load_agent(self, agent_name: str, llm=None) -> Optional[CustomAgent]:
         """
-        Load a custom agent from disk.
+        Load a custom agent from disk (with caching).
         
         Args:
             agent_name: Name of the agent to load
@@ -91,10 +96,16 @@ class AgentManager:
                 print(f"Agent '{agent_name}' not found")
                 return None
             
-            with open(file_path, 'r', encoding='utf-8') as f:
-                agent_data = json.load(f)
+            # Check cache first
+            if safe_name in self._agent_data_cache:
+                agent_data = self._agent_data_cache[safe_name]
+            else:
+                # Load from disk and cache
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    agent_data = json.load(f)
+                self._agent_data_cache[safe_name] = agent_data
             
-            # Create agent from data
+            # Create agent from data (LLM attached at creation time)
             agent = CustomAgent.from_dict(agent_data, llm=llm)
             return agent
             
@@ -150,6 +161,9 @@ class AgentManager:
                 return False
             
             file_path.unlink()
+            # Invalidate cache
+            if safe_name in self._agent_data_cache:
+                del self._agent_data_cache[safe_name]
             return True
             
         except Exception as e:

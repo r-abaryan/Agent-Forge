@@ -2,7 +2,10 @@
 Agent Chain - Sequential execution with data passing
 """
 
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Literal
+
+# Valid pass modes
+PassMode = Literal["cumulative", "sequential", "parallel"]
 
 
 class AgentChain:
@@ -24,7 +27,7 @@ class AgentChain:
         agent_names: List[str], 
         initial_input: str, 
         context: str = "",
-        pass_mode: str = "cumulative"
+        pass_mode: PassMode = "cumulative"
     ) -> Dict[str, Any]:
         """
         Execute agents in sequence.
@@ -41,10 +44,18 @@ class AgentChain:
         Returns:
             Dictionary with chain results
         """
+        # Validate inputs
         if not agent_names:
             return {
                 "success": False,
                 "error": "No agents specified",
+                "results": []
+            }
+        
+        if pass_mode not in ("cumulative", "sequential", "parallel"):
+            return {
+                "success": False,
+                "error": f"Invalid pass_mode: '{pass_mode}'. Must be 'cumulative', 'sequential', or 'parallel'",
                 "results": []
             }
         

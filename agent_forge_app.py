@@ -619,9 +619,6 @@ def execute_workflow_handler(
             """
             return f"❌ Workflow execution failed: {error_msg}", error_html
         
-        # Debug: Print result structure
-        print(f"Workflow result keys: {result.keys()}")
-        print(f"Results count: {len(result.get('results', []))}")
         
         # Build text output
         text_parts = [
@@ -735,7 +732,6 @@ def execute_workflow_handler(
     except Exception as e:
         import traceback
         error_details = traceback.format_exc()
-        print(f"Workflow execution error: {error_details}")  # Debug print
         
         error_html = f"""
         <div style='padding: 20px; background: #1a1f26; color: #e6edf3;'>
