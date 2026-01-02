@@ -3,7 +3,7 @@ Custom Agent - User-defined agents with custom prompts
 Adapted from CyberXP for general-purpose use
 """
 
-from typing import Dict, Any
+from typing import Dict, Any, Generator
 from .base_agent import BaseAgent
 import re
 
@@ -199,6 +199,9 @@ Your role: {self.role}
                 r'## Previous Results:.*?(?=\n\n|$)',
                 r'\[.*?Agent\]:\s*',
                 r'Human:.*?(?=\n|$)',
+                r'\*\*Role:\*\*.*?(?=\n|$)',
+                r'Role:.*?(?=\n|$)',
+                r'^- .*?(?:focused on|Using|Checking|Adapting|Encouraging|Providing).*?$',
             ]
             for pattern in patterns_to_remove:
                 response_clean = re.sub(pattern, '', response_clean, flags=re.IGNORECASE | re.DOTALL | re.MULTILINE)
@@ -221,6 +224,11 @@ Your role: {self.role}
                 r'^Context:',
                 r'^Human:',
                 r'^## Previous',
+                r'^\*\*Role:',
+                r'^Role:',
+                r'^- .*?(?:Breaking down|Using|Checking|Adapting|Encouraging|Providing)',
+                r'^- .*?(?:focused on|clear explanations)',
+                r'^Explain concepts',
             ]
             # Patterns to detect code lines
             code_line_patterns = [
@@ -349,6 +357,59 @@ Your role: {self.role}
                 "response": f"Error during processing: {str(e)}",
                 "success": False
             }
+    
+    def process_stream(self, input_text: str, context: str = "") -> Generator[str, None, None]:
+        """
+        Process input using streaming generation.
+        
+        Args:
+            input_text: Input text to process
+            context: Additional context
+        
+        Yields:
+            Response chunks as they're generated
+        """
+        if not self.llm:
+            yield "Error: No LLM configured for this agent"
+            return
+        
+        try:
+            from langchain_core.prompts import ChatPromptTemplate
+            
+            # Build prompt (same as process method)
+            system_prompt = self._system_prompt.strip()
+            
+            max_context_length = 2000
+            truncated_context = context.strip()[:max_context_length] if len(context.strip()) > max_context_length else context.strip()
+            
+            if truncated_context:
+                user_message = f"{input_text.strip()}\n\nContext: {truncated_context}"
+            else:
+                user_message = input_text.strip()
+            
+            max_user_message = 3000
+            if len(user_message) > max_user_message:
+                user_message = user_message[:max_user_message] + "... [truncated]"
+            
+            prompt = ChatPromptTemplate.from_messages([
+                ("system", system_prompt + "\n\n**IMPORTANT**: Your response should ONLY contain the actual answer/data. Do NOT include any guidelines, instructions, or meta-commentary in your response. Be direct and factual."),
+                ("human", user_message)
+            ])
+            
+            # Create streaming chain
+            chain = prompt | self.llm
+            
+            # Stream response
+            for chunk in chain.stream({}):
+                if hasattr(chunk, 'content'):
+                    yield chunk.content
+                elif isinstance(chunk, str):
+                    yield chunk
+                else:
+                    yield str(chunk)
+                    
+        except Exception as e:
+            yield f"Error during streaming: {str(e)}"
     
     def to_dict(self) -> Dict[str, str]:
         """Export agent configuration to dictionary"""
