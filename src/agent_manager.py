@@ -188,11 +188,12 @@ class AgentManager:
             True if successful, False otherwise
         """
         try:
-            # If name changed, delete old file
+            old_safe_name = self._sanitize_filename(old_name)
+            # If name changed, delete old file and invalidate cache
             if old_name != agent.name:
                 self.delete_agent(old_name)
             
-            # Save updated agent
+            # Save updated agent (cache will be updated in save_agent)
             return self.save_agent(agent)
             
         except Exception as e:
@@ -393,6 +394,10 @@ class AgentManager:
             results["error"] = str(e)
         
         return results
+    
+    def clear_cache(self):
+        """Clear the agent data cache (useful for memory management or forced refresh)"""
+        self._agent_data_cache.clear()
     
     def _sanitize_filename(self, name: str) -> str:
         """
