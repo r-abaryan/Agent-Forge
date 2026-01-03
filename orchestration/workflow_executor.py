@@ -13,6 +13,9 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from .orchestration_parser import OrchestrationParser
 from src.agent_manager import AgentManager
 from src.custom_agent import CustomAgent
+from src.logger_config import get_logger
+
+logger = get_logger("agentforge.workflow_executor")
 
 # Pre-compile commonly used regex patterns for better performance
 _URL_PATTERN = re.compile(r'https?://[^\s]+')

@@ -7,6 +7,9 @@ import os
 from pathlib import Path
 from datetime import datetime
 from typing import List, Dict, Optional
+from .logger_config import get_logger
+
+logger = get_logger("agentforge.history_manager")
 
 
 class HistoryManager:
@@ -32,7 +35,7 @@ class HistoryManager:
             if not gitignore_path.exists():
                 gitignore_path.write_text("# Ignore all history files\n*.json\n")
         except Exception as e:
-            print(f"Warning: Could not create history directory: {e}")
+            logger.warning(f"Could not create history directory: {e}")
     
     def save_conversation(
         self, 
@@ -80,7 +83,7 @@ class HistoryManager:
             return True
             
         except Exception as e:
-            print(f"Error saving conversation: {e}")
+            logger.error(f"Error saving conversation: {e}")
             return False
     
     def list_conversations(self, limit: int = 50) -> List[Dict[str, any]]:
@@ -121,11 +124,11 @@ class HistoryManager:
                     })
                     
                 except Exception as e:
-                    print(f"Error reading {file_path.name}: {e}")
+                    logger.error(f"Error reading {file_path.name}: {e}")
                     continue
         
         except Exception as e:
-            print(f"Error listing conversations: {e}")
+            logger.error(f"Error listing conversations: {e}")
         
         return conversations
     
@@ -149,7 +152,7 @@ class HistoryManager:
                 return json.load(f)
                 
         except Exception as e:
-            print(f"Error getting conversation '{filename}': {e}")
+            logger.error(f"Error getting conversation '{filename}': {e}")
             return None
     
     def delete_conversation(self, filename: str) -> bool:
@@ -172,7 +175,7 @@ class HistoryManager:
             return True
             
         except Exception as e:
-            print(f"Error deleting conversation '{filename}': {e}")
+            logger.error(f"Error deleting conversation '{filename}': {e}")
             return False
     
     def clear_all_history(self) -> bool:
@@ -188,7 +191,7 @@ class HistoryManager:
             return True
             
         except Exception as e:
-            print(f"Error clearing history: {e}")
+            logger.error(f"Error clearing history: {e}")
             return False
     
     def export_history(self, output_file: str = "history_export.json") -> bool:
@@ -220,7 +223,7 @@ class HistoryManager:
             return True
             
         except Exception as e:
-            print(f"Error exporting history: {e}")
+            logger.error(f"Error exporting history: {e}")
             return False
     
     def get_statistics(self) -> Dict[str, any]:
@@ -267,7 +270,7 @@ class HistoryManager:
             }
             
         except Exception as e:
-            print(f"Error getting statistics: {e}")
+            logger.error(f"Error getting statistics: {e}")
             return {
                 "total_conversations": 0,
                 "total_agent_invocations": 0,

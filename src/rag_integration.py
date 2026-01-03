@@ -7,13 +7,16 @@ import os
 from pathlib import Path
 from typing import List, Dict, Optional, Any
 import json
+from .logger_config import get_logger
+
+logger = get_logger("agentforge.rag")
 
 try:
     from src.vector_store import VectorStoreManager
     VECTOR_SEARCH_AVAILABLE = True
 except ImportError:
     VECTOR_SEARCH_AVAILABLE = False
-    print("Vector search unavailable - install chromadb and sentence-transformers")
+    logger.warning("Vector search unavailable - install chromadb and sentence-transformers")
 
 
 class SimpleRAG:
@@ -49,10 +52,10 @@ class SimpleRAG:
                     persist_directory=vector_store_dir,
                     collection_name="knowledge_base"
                 )
-                print("Vector-based semantic search enabled!")
+                logger.info("Vector-based semantic search enabled!")
             except Exception as e:
-                print(f"Could not initialize vector store: {e}")
-                print("Falling back to keyword search")
+                logger.warning(f"Could not initialize vector store: {e}")
+                logger.info("Falling back to keyword search")
                 self.use_vector_search = False
         
         self.load_knowledge_base()
@@ -88,7 +91,7 @@ Add text files (.txt, .md) or JSON files here for RAG retrieval.
 ```
 """)
         except Exception as e:
-            print(f"Warning: Could not create knowledge base directory: {e}")
+            logger.warning(f"Could not create knowledge base directory: {e}")
     
     def load_knowledge_base(self):
         """Load all documents from knowledge base directory"""
@@ -107,7 +110,7 @@ Add text files (.txt, .md) or JSON files here for RAG retrieval.
                         "metadata": {}
                     })
                 except Exception as e:
-                    print(f"Error loading {file_path.name}: {e}")
+                    logger.error(f"Error loading {file_path.name}: {e}")
             
             # Load markdown files
             for file_path in self.knowledge_base_dir.glob("*.md"):
@@ -123,7 +126,7 @@ Add text files (.txt, .md) or JSON files here for RAG retrieval.
                         "metadata": {}
                     })
                 except Exception as e:
-                    print(f"Error loading {file_path.name}: {e}")
+                    logger.error(f"Error loading {file_path.name}: {e}")
             
             # Load JSON files
             for file_path in self.knowledge_base_dir.glob("*.json"):
@@ -139,12 +142,12 @@ Add text files (.txt, .md) or JSON files here for RAG retrieval.
                         "metadata": data.get("metadata", {})
                     })
                 except Exception as e:
-                    print(f"Error loading {file_path.name}: {e}")
+                    logger.error(f"Error loading {file_path.name}: {e}")
         
         except Exception as e:
-            print(f"Error loading knowledge base: {e}")
+            logger.error(f"Error loading knowledge base: {e}")
         
-        print(f"Loaded {len(self.documents)} documents into knowledge base")
+        logger.info(f"Loaded {len(self.documents)} documents into knowledge base")
     
     def search(self, query: str, top_k: int = 3) -> List[Dict[str, Any]]:
         """
@@ -184,7 +187,7 @@ Add text files (.txt, .md) or JSON files here for RAG retrieval.
                 
                 return results
             except Exception as e:
-                print(f"Vector search failed, falling back to keyword search: {e}")
+                logger.warning(f"Vector search failed, falling back to keyword search: {e}")
         
         # Fallback to keyword search
         query_lower = query.lower()
@@ -295,7 +298,7 @@ Add text files (.txt, .md) or JSON files here for RAG retrieval.
                         metadata=meta
                     )
                 except Exception as e:
-                    print(f"Warning: Could not add to vector store: {e}")
+                    logger.warning(f"Could not add to vector store: {e}")
             
             # Reload knowledge base
             self.load_knowledge_base()
@@ -303,7 +306,7 @@ Add text files (.txt, .md) or JSON files here for RAG retrieval.
             return True
             
         except Exception as e:
-            print(f"Error adding document: {e}")
+            logger.error(f"Error adding document: {e}")
             return False
     
     def delete_document(self, filename: str) -> bool:
@@ -330,7 +333,7 @@ Add text files (.txt, .md) or JSON files here for RAG retrieval.
             return True
             
         except Exception as e:
-            print(f"Error deleting document: {e}")
+            logger.error(f"Error deleting document: {e}")
             return False
     
     def list_documents(self) -> List[Dict[str, str]]:

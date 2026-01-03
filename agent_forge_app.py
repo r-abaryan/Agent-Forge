@@ -21,6 +21,7 @@ from src.agent_templates import AgentTemplates
 from src.history_manager import HistoryManager
 from src.agent_chain import AgentChain, WorkflowPresets
 from src.rag_integration import SimpleRAG
+from src.logger_config import setup_logger
 
 # Orchestration imports
 import json
@@ -29,6 +30,8 @@ from orchestration.orchestration_parser import OrchestrationParser
 
 # Configuration
 DEFAULT_MODEL = "abaryan/CyberXP_Agent_Llama_3.2_1B"
+
+logger = setup_logger("agentforge.app")
 
 # Global instances
 llm = None
@@ -48,7 +51,7 @@ def initialize(model_path: str = DEFAULT_MODEL):
     """
     global llm, agent_manager, history_manager, agent_chain, rag_system
     
-    print(f"Loading model: {model_path}...")
+    logger.info(f"Loading model: {model_path}...")
     tokenizer = AutoTokenizer.from_pretrained(model_path, use_fast=True)
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
@@ -82,12 +85,12 @@ def initialize(model_path: str = DEFAULT_MODEL):
     global workflow_executor
     try:
         workflow_executor = WorkflowExecutor(agent_manager, llm, auto_create_agents=True)
-        print("Workflow executor initialized successfully")
+        logger.info("Workflow executor initialized successfully")
     except Exception as e:
-        print(f"Warning: Could not initialize workflow executor: {e}")
+        logger.warning(f"Could not initialize workflow executor: {e}")
         workflow_executor = None
     
-    print("Initialization complete!")
+    logger.info("Initialization complete!")
 
 
 # ============================================================================
@@ -1516,9 +1519,9 @@ def build_interface():
 # ============================================================================
 
 if __name__ == "__main__":
-    print("Initializing AgentForge...")
+    logger.info("Initializing AgentForge...")
     initialize(DEFAULT_MODEL)
     
-    print("Starting web interface...")
+    logger.info("Starting web interface...")
     app = build_interface()
     app.launch(server_name="0.0.0.0", server_port=7870, share=False)

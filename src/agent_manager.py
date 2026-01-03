@@ -10,6 +10,9 @@ from pathlib import Path
 from typing import List, Dict, Optional
 from datetime import datetime
 from .custom_agent import CustomAgent
+from .logger_config import get_logger
+
+logger = get_logger("agentforge.agent_manager")
 
 
 class AgentManager:
@@ -40,7 +43,7 @@ class AgentManager:
             if not gitignore_path.exists():
                 gitignore_path.write_text("# Ignore all custom agent files\n*.json\n")
         except Exception as e:
-            print(f"Warning: Could not create storage directory: {e}")
+            logger.warning(f"Could not create storage directory: {e}")
     
     def save_agent(self, agent: CustomAgent) -> bool:
         """
@@ -74,7 +77,7 @@ class AgentManager:
             return True
             
         except Exception as e:
-            print(f"Error saving agent '{agent.name}': {e}")
+            logger.error(f"Error saving agent '{agent.name}': {e}")
             return False
     
     def load_agent(self, agent_name: str, llm=None) -> Optional[CustomAgent]:
@@ -93,7 +96,7 @@ class AgentManager:
             file_path = self.storage_dir / f"{safe_name}.json"
             
             if not file_path.exists():
-                print(f"Agent '{agent_name}' not found")
+                logger.warning(f"Agent '{agent_name}' not found")
                 return None
             
             # Check cache first
@@ -110,7 +113,7 @@ class AgentManager:
             return agent
             
         except Exception as e:
-            print(f"Error loading agent '{agent_name}': {e}")
+            logger.error(f"Error loading agent '{agent_name}': {e}")
             return None
     
     def list_agents(self) -> List[Dict[str, str]]:
@@ -134,11 +137,11 @@ class AgentManager:
                         "filename": file_path.stem
                     })
                 except Exception as e:
-                    print(f"Error reading {file_path.name}: {e}")
+                    logger.error(f"Error reading {file_path.name}: {e}")
                     continue
         
         except Exception as e:
-            print(f"Error listing agents: {e}")
+            logger.error(f"Error listing agents: {e}")
         
         return sorted(agents, key=lambda x: x["name"].lower())
     
@@ -157,7 +160,7 @@ class AgentManager:
             file_path = self.storage_dir / f"{safe_name}.json"
             
             if not file_path.exists():
-                print(f"Agent '{agent_name}' not found")
+                logger.warning(f"Agent '{agent_name}' not found")
                 return False
             
             file_path.unlink()
@@ -167,7 +170,7 @@ class AgentManager:
             return True
             
         except Exception as e:
-            print(f"Error deleting agent '{agent_name}': {e}")
+            logger.error(f"Error deleting agent '{agent_name}': {e}")
             return False
     
     def agent_exists(self, agent_name: str) -> bool:
@@ -197,7 +200,7 @@ class AgentManager:
             return self.save_agent(agent)
             
         except Exception as e:
-            print(f"Error updating agent '{old_name}': {e}")
+            logger.error(f"Error updating agent '{old_name}': {e}")
             return False
     
     def get_agent_data(self, agent_name: str) -> Optional[Dict[str, str]]:
@@ -221,7 +224,7 @@ class AgentManager:
                 return json.load(f)
                 
         except Exception as e:
-            print(f"Error getting agent data '{agent_name}': {e}")
+            logger.error(f"Error getting agent data '{agent_name}': {e}")
             return None
     
     def export_agent(self, agent_name: str, output_path: str) -> bool:
@@ -253,7 +256,7 @@ class AgentManager:
             return True
             
         except Exception as e:
-            print(f"Error exporting agent '{agent_name}': {e}")
+            logger.error(f"Error exporting agent '{agent_name}': {e}")
             return False
     
     def import_agent(self, import_path: str, llm=None, overwrite: bool = False) -> bool:
@@ -282,7 +285,7 @@ class AgentManager:
             # Check if agent exists
             agent_name = agent_data.get("name", "")
             if self.agent_exists(agent_name) and not overwrite:
-                print(f"Agent '{agent_name}' already exists. Use overwrite=True to replace.")
+                logger.warning(f"Agent '{agent_name}' already exists. Use overwrite=True to replace.")
                 return False
             
             # Create and save agent
@@ -290,7 +293,7 @@ class AgentManager:
             return self.save_agent(agent)
             
         except Exception as e:
-            print(f"Error importing agent: {e}")
+            logger.error(f"Error importing agent: {e}")
             return False
     
     def export_all_agents(self, output_path: str = "agents_backup.zip") -> bool:
@@ -320,7 +323,7 @@ class AgentManager:
             return True
             
         except Exception as e:
-            print(f"Error exporting all agents: {e}")
+            logger.error(f"Error exporting all agents: {e}")
             return False
     
     def import_all_agents(self, import_path: str, llm=None, overwrite: bool = False) -> Dict[str, any]:
@@ -390,7 +393,7 @@ class AgentManager:
                         })
         
         except Exception as e:
-            print(f"Error importing agents: {e}")
+            logger.error(f"Error importing agents: {e}")
             results["error"] = str(e)
         
         return results
