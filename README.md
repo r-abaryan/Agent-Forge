@@ -20,6 +20,7 @@ Create, manage, and orchestrate specialized AI agents for any purpose. Model-agn
 - **Usage Analytics**: Track performance and utilization
 - **Import/Export**: Share agents and create backups (JSON/ZIP)
 - **Model Agnostic**: Compatible with any Hugging Face language model
+- **Proper Looging**: Detailed Logging per run
 
 ## Quick Start
 
