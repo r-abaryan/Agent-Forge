@@ -19,9 +19,9 @@ def main():
 ╔══════════════════════════════════════════════════════════╗
 ║          AgentForge REST API Server                      ║
 ╠══════════════════════════════════════════════════════════╣
-║  Server: http://{args.host}:{args.port}                 ║
-║  Docs:   http://{args.host}:{args.port}/docs            ║
-║  Health: http://{args.host}:{args.port}/health          ║
+║  Server: http://{args.host}:{args.port}                  ║
+║  Docs:   http://{args.host}:{args.port}/docs             ║
+║  Health: http://{args.host}:{args.port}/health           ║
 ╚══════════════════════════════════════════════════════════╝
     """)
     

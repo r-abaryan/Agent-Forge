@@ -12,3 +12,5 @@ orchestration/__pycache__
 orchestration/test_workflow.py
 orchestration/example_workflow_execution.py
 API_USAGE.md
+features.md
+workflow_templates.py
