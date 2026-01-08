@@ -320,7 +320,7 @@ class WorkflowTemplates:
         ]
     
     @staticmethod
-    def get_template_by_name(name: str) -> Optional[Dict[str, Any]]:
+    def get_template_by_name(name: str) -> Dict[str, Any] | None:
         """Get a specific template by name"""
         templates = WorkflowTemplates.get_all_templates()
         for template in templates:
@@ -338,6 +338,6 @@ class WorkflowTemplates:
     def get_categories() -> List[str]:
         """Get all available categories"""
         templates = WorkflowTemplates.get_all_templates()
-        categories = set(t.get("category", "Other") for t in templates)
-        return sorted(list(categories))
+        categories = set[Any](t.get("category", "Other") for t in templates)
+        return sorted(list[str](categories))
 
