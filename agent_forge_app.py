@@ -27,6 +27,8 @@ from src.logger_config import setup_logger
 import json
 from orchestration.workflow_executor import WorkflowExecutor
 from orchestration.orchestration_parser import OrchestrationParser
+from orchestration.workflow_manager import WorkflowManager
+from orchestration.workflow_templates import WorkflowTemplates
 
 # Configuration
 DEFAULT_MODEL = "abaryan/CyberXP_Agent_Llama_3.2_1B"
@@ -40,6 +42,7 @@ history_manager = None
 agent_chain = None
 rag_system = None
 workflow_executor = None
+workflow_manager = None
 
 
 def initialize(model_path: str = DEFAULT_MODEL):
@@ -82,13 +85,15 @@ def initialize(model_path: str = DEFAULT_MODEL):
     rag_system = SimpleRAG(knowledge_base_dir="knowledge_base", use_vector_search=True)
     
     # Initialize workflow executor (needs agent_manager and llm)
-    global workflow_executor
+    global workflow_executor, workflow_manager
     try:
         workflow_executor = WorkflowExecutor(agent_manager, llm, auto_create_agents=True)
-        logger.info("Workflow executor initialized successfully")
+        workflow_manager = WorkflowManager(storage_dir="workflows")
+        logger.info("Workflow executor and manager initialized successfully")
     except Exception as e:
         logger.warning(f"Could not initialize workflow executor: {e}")
         workflow_executor = None
+        workflow_manager = None
     
     logger.info("Initialization complete!")
 
@@ -515,6 +520,146 @@ def get_kb_stats() -> str:
 # ============================================================================
 # CANVAS WORKFLOW EXECUTION
 # ============================================================================
+
+def load_workflow_template(template_name: str) -> Tuple[str, str]:
+    """Load a workflow template"""
+    try:
+        if not template_name:
+            return "", "⚠️ Please select a template"
+        
+        template = WorkflowTemplates.get_template_by_name(template_name)
+        if not template:
+            return "", f"⚠️ Template '{template_name}' not found"
+        
+        workflow_json = template["workflow"]
+        workflow_json_str = json.dumps(workflow_json, indent=2)
+        
+        # Parse to show info
+        parser = OrchestrationParser()
+        parsed = parser.parse_workflow(workflow_json)
+        info = f"✅ **Template Loaded: {template_name}**\n\n**Agents:** {len(parsed.get('agent_sequence', []))}\n**Description:** {template.get('description', 'N/A')}"
+        
+        return workflow_json_str, info
+    except Exception as e:
+        return "", f"❌ Error loading template: {str(e)}"
+
+
+def save_workflow_handler(workflow_json_str: str, workflow_name: str, description: str) -> str:
+    """Save a workflow"""
+    try:
+        if not workflow_manager:
+            return "⚠️ Workflow manager not initialized"
+        
+        if not workflow_json_str or not workflow_json_str.strip():
+            return "⚠️ Please provide workflow JSON"
+        
+        if not workflow_name or not workflow_name.strip():
+            return "⚠️ Please provide workflow name"
+        
+        workflow_json = json.loads(workflow_json_str)
+        success = workflow_manager.save_workflow(
+            workflow_json=workflow_json,
+            workflow_name=workflow_name.strip(),
+            description=description.strip() if description else None
+        )
+        
+        if success:
+            return f"✅ Workflow '{workflow_name}' saved successfully!"
+        else:
+            return f"❌ Failed to save workflow '{workflow_name}'"
+    except json.JSONDecodeError:
+        return "❌ Invalid JSON format"
+    except Exception as e:
+        return f"❌ Error saving workflow: {str(e)}"
+
+
+def load_saved_workflow(workflow_name: str) -> Tuple[str, str]:
+    """Load a saved workflow"""
+    try:
+        if not workflow_manager:
+            return "", "⚠️ Workflow manager not initialized"
+        
+        if not workflow_name:
+            return "", "⚠️ Please select a workflow"
+        
+        workflow_json = workflow_manager.load_workflow(workflow_name)
+        if not workflow_json:
+            return "", f"⚠️ Workflow '{workflow_name}' not found"
+        
+        workflow_json_str = json.dumps(workflow_json, indent=2)
+        
+        # Parse to show info
+        parser = OrchestrationParser()
+        parsed = parser.parse_workflow(workflow_json)
+        metadata = workflow_manager.get_workflow_metadata(workflow_name)
+        info = f"✅ **Workflow Loaded: {workflow_name}**\n\n**Agents:** {len(parsed.get('agent_sequence', []))}\n**Created:** {metadata.get('created_at', 'N/A')[:10] if metadata else 'N/A'}"
+        
+        return workflow_json_str, info
+    except Exception as e:
+        return "", f"❌ Error loading workflow: {str(e)}"
+
+
+def list_saved_workflows() -> str:
+    """List all saved workflows"""
+    try:
+        if not workflow_manager:
+            return "⚠️ Workflow manager not initialized"
+        
+        workflows = workflow_manager.list_workflows()
+        if not workflows:
+            return "📭 No saved workflows found"
+        
+        lines = ["### 📚 Saved Workflows\n"]
+        for wf in workflows:
+            lines.append(f"**{wf['name']}**")
+            if wf.get('description'):
+                lines.append(f"  - {wf['description']}")
+            lines.append(f"  - Created: {wf.get('created_at', 'N/A')[:10]}")
+            lines.append(f"  - Agents: {wf.get('agent_count', 0)}")
+            lines.append("")
+        
+        return "\n".join(lines)
+    except Exception as e:
+        return f"❌ Error listing workflows: {str(e)}"
+
+
+def delete_workflow_handler(workflow_name: str) -> Tuple[str, str]:
+    """Delete a saved workflow"""
+    try:
+        if not workflow_manager:
+            return "", "⚠️ Workflow manager not initialized"
+        
+        if not workflow_name:
+            return "", "⚠️ Please select a workflow to delete"
+        
+        success = workflow_manager.delete_workflow(workflow_name)
+        if success:
+            return list_saved_workflows(), f"✅ Workflow '{workflow_name}' deleted"
+        else:
+            return list_saved_workflows(), f"❌ Failed to delete workflow '{workflow_name}'"
+    except Exception as e:
+        return list_saved_workflows(), f"❌ Error deleting workflow: {str(e)}"
+
+
+def get_workflow_template_list() -> List[str]:
+    """Get list of workflow template names"""
+    try:
+        templates = WorkflowTemplates.get_all_templates()
+        return [t["name"] for t in templates]
+    except Exception:
+        return []
+
+
+def get_saved_workflow_list() -> List[str]:
+    """Get list of saved workflow names"""
+    try:
+        if not workflow_manager:
+            return []
+        workflows = workflow_manager.list_workflows()
+        return [w["name"] for w in workflows]
+    except Exception:
+        return []
+
 
 def parse_workflow_json(workflow_json_str: str) -> Tuple[str, Dict[str, Any]]:
     """
@@ -1341,126 +1486,245 @@ def build_interface():
             # TAB 6: CANVAS WORKFLOWS
             # ================================================================
             with gr.Tab("🎨 Canvas Workflows"):
-                gr.Markdown("### Execute Canvas Workflows")
-                gr.Markdown("Import and execute workflows from canvas-based workflow designers")
-                
-                with gr.Row():
-                    with gr.Column(scale=2):
-                        workflow_json_input = gr.Textbox(
-                            label="Workflow JSON",
-                            lines=15,
-                            placeholder='Paste your canvas workflow JSON here...\n\nExample format:\n{\n  "version": "1.1.0",\n  "format": "website-playground",\n  "name": "Workflow Name",\n  "graph": { "cells": [...] }\n}',
-                            info="Paste the JSON exported from your canvas workflow designer"
-                        )
-                        
-                        with gr.Row():
-                            parse_workflow_btn = gr.Button("🔍 Parse Workflow", variant="secondary")
-                        
-                        workflow_info = gr.Markdown(
-                            value="**Instructions:**\n1. Paste your canvas workflow JSON above\n2. Click 'Parse Workflow' to validate and view workflow structure\n3. Enter input text and execute the workflow",
-                            label="Workflow Info"
-                        )
-                        
-                        gr.Markdown("---")
-                        gr.Markdown("### Execute Workflow")
-                        
-                        workflow_input = gr.Textbox(
-                            label="Input Text",
-                            lines=4,
-                            placeholder="Enter your input for the workflow..."
-                        )
-                        
-                        workflow_context = gr.Textbox(
-                            label="Context (Optional)",
-                            lines=2,
-                            placeholder="Additional context..."
-                        )
-                        
-                        workflow_mode = gr.Radio(
-                            choices=["cumulative", "sequential", "parallel"],
-                            value="cumulative",
-                            label="Pass Mode",
-                            info="cumulative: All previous outputs | sequential: Only previous output | parallel: No chaining"
-                        )
-                        
-                        execute_workflow_btn = gr.Button("⚡ Execute Workflow", variant="primary", size="lg")
-                    
-                    with gr.Column(scale=1):
-                        gr.Markdown("### Quick Guide")
-                        gr.Markdown("""
-                        **Features:**
-                        - Import workflows from canvas designers
-                        - Auto-create agents from workflow config
-                        - Visual step-by-step execution
-                        - Full workflow history tracking
-                        
-                        **Workflow Format:**
-                        - Supports canvas JSON exports
-                        - Agent nodes with config
-                        - Trigger-start and end-sink nodes
-                        - Standard link connections
-                        
-                        **Tips:**
-                        - Parse workflow first to validate
-                        - Agents are created automatically if missing
-                        - Check execution order in workflow info
-                        """)
+                gr.Markdown("### Canvas Workflow Management & Execution")
+                gr.Markdown("Import, save, and execute workflows from canvas-based workflow designers")
                 
                 with gr.Tabs():
-                    with gr.Tab("📊 Visual Output"):
-                        workflow_html_output = gr.HTML(
-                            value='<div style="text-align:center;padding:40px;color:#9aa4ad;">Parse and execute a workflow to see results...</div>'
+                    # Template Gallery
+                    with gr.Tab("📋 Templates"):
+                        gr.Markdown("### Pre-built Workflow Templates")
+                        gr.Markdown("Load ready-to-use workflows for common use cases")
+                        
+                        template_selector = gr.Dropdown(
+                            choices=get_workflow_template_list(),
+                            label="Select Template",
+                            interactive=True
+                        )
+                        
+                        template_info = gr.Markdown("")
+                        load_template_btn = gr.Button("📥 Load Template", variant="primary")
+                        
+                        def update_template_info(template_name: str):
+                            if not template_name:
+                                return "Select a template to view details"
+                            template = WorkflowTemplates.get_template_by_name(template_name)
+                            if template:
+                                return f"""
+**{template['name']}**
+- **Category:** {template.get('category', 'N/A')}
+- **Description:** {template.get('description', 'N/A')}
+- **Agents:** {len(template['workflow'].get('graph', {}).get('cells', []))} nodes
+"""
+                            return "Template not found"
+                        
+                        template_selector.change(
+                            fn=update_template_info,
+                            inputs=[template_selector],
+                            outputs=[template_info]
+                        )
+                        
+                        load_template_btn.click(
+                            fn=load_workflow_template,
+                            inputs=[template_selector],
+                            outputs=[workflow_json_input, workflow_info]
                         )
                     
-                    with gr.Tab("📝 Raw Text"):
-                        workflow_text_output = gr.Textbox(
-                            label="Workflow Results",
-                            lines=20,
-                            placeholder="Workflow execution results will appear here..."
+                    # Saved Workflows
+                    with gr.Tab("💾 Saved Workflows"):
+                        gr.Markdown("### Manage Saved Workflows")
+                        
+                        with gr.Row():
+                            with gr.Column(scale=2):
+                                saved_workflow_selector = gr.Dropdown(
+                                    choices=get_saved_workflow_list(),
+                                    label="Select Saved Workflow",
+                                    interactive=True
+                                )
+                                
+                                refresh_saved_btn = gr.Button("🔄 Refresh List", size="sm")
+                                
+                                load_saved_btn = gr.Button("📂 Load Workflow", variant="primary")
+                                delete_saved_btn = gr.Button("🗑️ Delete Workflow", variant="stop")
+                            
+                            with gr.Column(scale=1):
+                                saved_workflow_list = gr.Markdown(list_saved_workflows())
+                        
+                        saved_workflow_status = gr.Markdown("")
+                        
+                        def refresh_saved_workflows():
+                            workflows = get_saved_workflow_list()
+                            return gr.update(choices=workflows), list_saved_workflows()
+                        
+                        refresh_saved_btn.click(
+                            fn=refresh_saved_workflows,
+                            outputs=[saved_workflow_selector, saved_workflow_list]
                         )
-                
-                def show_workflow_loading():
-                    loading_html = '''
-                    <div style="text-align:center;padding:60px;background:#11161d;border-radius:8px;">
-                        <div style="font-size:48px;margin-bottom:20px;">🎨</div>
-                        <div style="font-size:18px;color:#8ab4f8;margin-bottom:10px;">Executing Workflow...</div>
-                        <div style="font-size:14px;color:#9aa4ad;">Processing your workflow with agents</div>
-                        <div style="margin-top:20px;">
-                            <div style="width:200px;height:4px;background:#1f2a35;margin:0 auto;border-radius:2px;overflow:hidden;">
-                                <div style="width:100%;height:100%;background:linear-gradient(90deg,#8ab4f8,#6a94f8,#8ab4f8);
-                                            animation:loading 1.5s ease-in-out infinite;"></div>
+                        
+                        load_saved_btn.click(
+                            fn=load_saved_workflow,
+                            inputs=[saved_workflow_selector],
+                            outputs=[gr.update(visible=False), saved_workflow_status]
+                        )
+                        
+                        delete_saved_btn.click(
+                            fn=delete_workflow_handler,
+                            inputs=[saved_workflow_selector],
+                            outputs=[saved_workflow_list, saved_workflow_status]
+                        ).then(
+                            fn=refresh_saved_workflows,
+                            outputs=[saved_workflow_selector, saved_workflow_list]
+                        )
+                    
+                    # Execute Workflow
+                    with gr.Tab("⚡ Execute"):
+                        with gr.Row():
+                            with gr.Column(scale=2):
+                                workflow_json_input = gr.Textbox(
+                                    label="Workflow JSON",
+                                    lines=15,
+                                    placeholder='Paste your canvas workflow JSON here...\n\nExample format:\n{\n  "version": "1.1.0",\n  "format": "website-playground",\n  "name": "Workflow Name",\n  "graph": { "cells": [...] }\n}',
+                                    info="Paste the JSON exported from your canvas workflow designer"
+                                )
+                                
+                                with gr.Row():
+                                    parse_workflow_btn = gr.Button("🔍 Parse Workflow", variant="secondary")
+                                    save_workflow_btn = gr.Button("💾 Save Workflow", variant="secondary")
+                                
+                                workflow_info = gr.Markdown(
+                                    value="**Instructions:**\n1. Paste your canvas workflow JSON above\n2. Click 'Parse Workflow' to validate and view workflow structure\n3. Enter input text and execute the workflow",
+                                    label="Workflow Info"
+                                )
+                                
+                                save_workflow_name = gr.Textbox(
+                                    label="Workflow Name (for saving)",
+                                    placeholder="Enter a name for this workflow"
+                                )
+                                
+                                save_workflow_desc = gr.Textbox(
+                                    label="Description (optional)",
+                                    placeholder="Brief description of this workflow"
+                                )
+                                
+                                save_workflow_status = gr.Markdown("")
+                                
+                                gr.Markdown("---")
+                                gr.Markdown("### Execute Workflow")
+                                
+                                workflow_input = gr.Textbox(
+                                    label="Input Text",
+                                    lines=4,
+                                    placeholder="Enter your input for the workflow..."
+                                )
+                                
+                                workflow_context = gr.Textbox(
+                                    label="Context (Optional)",
+                                    lines=2,
+                                    placeholder="Additional context..."
+                                )
+                                
+                                workflow_mode = gr.Radio(
+                                    choices=["cumulative", "sequential", "parallel"],
+                                    value="cumulative",
+                                    label="Pass Mode",
+                                    info="cumulative: All previous outputs | sequential: Only previous output | parallel: No chaining"
+                                )
+                                
+                                execute_workflow_btn = gr.Button("⚡ Execute Workflow", variant="primary", size="lg")
+                            
+                            with gr.Column(scale=1):
+                                gr.Markdown("### Quick Guide")
+                                gr.Markdown("""
+                                **Features:**
+                                - Import workflows from canvas designers
+                                - Load pre-built templates
+                                - Save workflows for reuse
+                                - Auto-create agents from workflow config
+                                - Visual step-by-step execution
+                                
+                                **Workflow Format:**
+                                - Supports canvas JSON exports
+                                - Agent nodes with config
+                                - Trigger-start and end-sink nodes
+                                - Standard link connections
+                                
+                                **Tips:**
+                                - Parse workflow first to validate
+                                - Agents are created automatically if missing
+                                - Check execution order in workflow info
+                                - Save workflows to reuse later
+                                """)
+                        
+                        with gr.Tabs():
+                            with gr.Tab("📊 Visual Output"):
+                                workflow_html_output = gr.HTML(
+                                    value='<div style="text-align:center;padding:40px;color:#9aa4ad;">Parse and execute a workflow to see results...</div>'
+                                )
+                            
+                            with gr.Tab("📝 Raw Text"):
+                                workflow_text_output = gr.Textbox(
+                                    label="Workflow Results",
+                                    lines=20,
+                                    placeholder="Workflow execution results will appear here..."
+                                )
+                        
+                        def show_workflow_loading():
+                            loading_html = '''
+                            <div style="text-align:center;padding:60px;background:#11161d;border-radius:8px;">
+                                <div style="font-size:48px;margin-bottom:20px;">🎨</div>
+                                <div style="font-size:18px;color:#8ab4f8;margin-bottom:10px;">Executing Workflow...</div>
+                                <div style="font-size:14px;color:#9aa4ad;">Processing your workflow with agents</div>
+                                <div style="margin-top:20px;">
+                                    <div style="width:200px;height:4px;background:#1f2a35;margin:0 auto;border-radius:2px;overflow:hidden;">
+                                        <div style="width:100%;height:100%;background:linear-gradient(90deg,#8ab4f8,#6a94f8,#8ab4f8);
+                                                    animation:loading 1.5s ease-in-out infinite;"></div>
+                                    </div>
+                                </div>
+                                <style>
+                                    @keyframes loading {
+                                        0% { transform: translateX(-100%); }
+                                        100% { transform: translateX(100%); }
+                                    }
+                                </style>
                             </div>
-                        </div>
-                        <style>
-                            @keyframes loading {
-                                0% { transform: translateX(-100%); }
-                                100% { transform: translateX(100%); }
-                            }
-                        </style>
-                    </div>
-                    '''
-                    return "", loading_html
-                
-                def parse_workflow_wrapper(json_str: str):
-                    """Wrapper to handle parse workflow"""
-                    status, _ = parse_workflow_json(json_str)
-                    return status
-                
-                parse_workflow_btn.click(
-                    fn=parse_workflow_wrapper,
-                    inputs=[workflow_json_input],
-                    outputs=[workflow_info]
-                )
-                
-                execute_workflow_btn.click(
-                    fn=show_workflow_loading,
-                    inputs=None,
-                    outputs=[workflow_text_output, workflow_html_output]
-                ).then(
-                    fn=execute_workflow_handler,
-                    inputs=[workflow_json_input, workflow_input, workflow_context, workflow_mode],
-                    outputs=[workflow_text_output, workflow_html_output]
-                )
+                            '''
+                            return "", loading_html
+                        
+                        def parse_workflow_wrapper(json_str: str):
+                            """Wrapper to handle parse workflow"""
+                            status, _ = parse_workflow_json(json_str)
+                            return status
+                        
+                        # Connect saved workflow loading to workflow_json_input (duplicate handler for Execute tab)
+                        load_saved_btn.click(
+                            fn=load_saved_workflow,
+                            inputs=[saved_workflow_selector],
+                            outputs=[workflow_json_input, workflow_info]
+                        )
+                        
+                        parse_workflow_btn.click(
+                            fn=parse_workflow_wrapper,
+                            inputs=[workflow_json_input],
+                            outputs=[workflow_info]
+                        )
+                        
+                        save_workflow_btn.click(
+                            fn=save_workflow_handler,
+                            inputs=[workflow_json_input, save_workflow_name, save_workflow_desc],
+                            outputs=[save_workflow_status]
+                        ).then(
+                            fn=lambda: gr.update(choices=get_saved_workflow_list()),
+                            outputs=[saved_workflow_selector]
+                        )
+                        
+                        execute_workflow_btn.click(
+                            fn=show_workflow_loading,
+                            inputs=None,
+                            outputs=[workflow_text_output, workflow_html_output]
+                        ).then(
+                            fn=execute_workflow_handler,
+                            inputs=[workflow_json_input, workflow_input, workflow_context, workflow_mode],
+                            outputs=[workflow_text_output, workflow_html_output]
+                        )
             
             # ================================================================
             # TAB 7: HISTORY & STATS
