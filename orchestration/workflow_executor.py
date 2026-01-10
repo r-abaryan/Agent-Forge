@@ -11,9 +11,11 @@ from typing import Dict, List, Any, Optional
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from .orchestration_parser import OrchestrationParser
+from .workflow_analytics import WorkflowAnalytics
 from src.agent_manager import AgentManager
 from src.custom_agent import CustomAgent
 from src.logger_config import get_logger
+import time
 
 logger = get_logger("agentforge.workflow_executor")
 
@@ -89,7 +91,13 @@ def _extract_label_from_context(context: str) -> Optional[str]:
 class WorkflowExecutor:
     """Execute canvas workflows using AgentForge agents"""
     
-    def __init__(self, agent_manager: AgentManager, llm=None, auto_create_agents: bool = True):
+    def __init__(
+        self,
+        agent_manager: AgentManager,
+        llm=None,
+        auto_create_agents: bool = True,
+        enable_analytics: bool = True
+    ):
         """
         Initialize workflow executor.
         
@@ -97,11 +105,13 @@ class WorkflowExecutor:
             agent_manager: AgentManager instance
             llm: Language model instance
             auto_create_agents: If True, create agents that don't exist from workflow config
+            enable_analytics: If True, track execution metrics
         """
         self.agent_manager = agent_manager
         self.llm = llm
         self.auto_create_agents = auto_create_agents
         self.parser = OrchestrationParser()
+        self.analytics = WorkflowAnalytics() if enable_analytics else None
     
     def execute_workflow(
         self,
@@ -160,7 +170,7 @@ class WorkflowExecutor:
                         else:
                             missing_agents.append(agent_name)
                     else:
-                        missing_agents.append(agent_name)
+                    missing_agents.append(agent_name)
             
             if missing_agents:
                 return {
