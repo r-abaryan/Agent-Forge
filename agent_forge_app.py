@@ -29,6 +29,7 @@ from orchestration.workflow_executor import WorkflowExecutor
 from orchestration.orchestration_parser import OrchestrationParser
 from orchestration.workflow_manager import WorkflowManager
 from orchestration.workflow_templates import WorkflowTemplates
+from orchestration.workflow_analytics import WorkflowAnalytics
 
 # Configuration
 DEFAULT_MODEL = "abaryan/CyberXP_Agent_Llama_3.2_1B"
@@ -43,6 +44,7 @@ agent_chain = None
 rag_system = None
 workflow_executor = None
 workflow_manager = None
+workflow_analytics = None
 
 
 def initialize(model_path: str = DEFAULT_MODEL):
@@ -85,15 +87,17 @@ def initialize(model_path: str = DEFAULT_MODEL):
     rag_system = SimpleRAG(knowledge_base_dir="knowledge_base", use_vector_search=True)
     
     # Initialize workflow executor (needs agent_manager and llm)
-    global workflow_executor, workflow_manager
+    global workflow_executor, workflow_manager, workflow_analytics
     try:
-        workflow_executor = WorkflowExecutor(agent_manager, llm, auto_create_agents=True)
+        workflow_executor = WorkflowExecutor(agent_manager, llm, auto_create_agents=True, enable_analytics=True)
         workflow_manager = WorkflowManager(storage_dir="workflows")
-        logger.info("Workflow executor and manager initialized successfully")
+        workflow_analytics = WorkflowAnalytics(storage_dir="workflow_analytics")
+        logger.info("Workflow executor, manager, and analytics initialized successfully")
     except Exception as e:
-        logger.warning(f"Could not initialize workflow executor: {e}")
+        logger.warning(f"Could not initialize workflow components: {e}")
         workflow_executor = None
         workflow_manager = None
+        workflow_analytics = None
     
     logger.info("Initialization complete!")
 
@@ -659,6 +663,99 @@ def get_saved_workflow_list() -> List[str]:
         return [w["name"] for w in workflows]
     except Exception:
         return []
+
+
+def get_workflow_analytics_summary(workflow_name: str) -> str:
+    """Get analytics summary for a workflow"""
+    try:
+        if not workflow_analytics:
+            return "⚠️ Analytics not initialized"
+        
+        if not workflow_name:
+            return "⚠️ Please select a workflow"
+        
+        summary = workflow_analytics.get_workflow_summary(workflow_name)
+        
+        lines = [
+            f"### 📊 Analytics: {workflow_name}\n",
+            f"**Total Executions:** {summary.get('total_executions', 0)}",
+            f"**Successful:** {summary.get('successful_executions', 0)}",
+            f"**Failed:** {summary.get('failed_executions', 0)}",
+            f"**Success Rate:** {summary.get('success_rate', 0):.1f}%",
+            f"**Average Duration:** {summary.get('avg_duration', 0):.2f}s",
+            f"**Min Duration:** {summary.get('min_duration', 0):.2f}s",
+            f"**Max Duration:** {summary.get('max_duration', 0):.2f}s",
+            f"**Total Tokens:** {summary.get('total_tokens', 0):,}",
+            f"**Avg Tokens:** {summary.get('avg_tokens', 0):.0f}",
+            f"**Avg Agents:** {summary.get('avg_agents', 0):.1f}",
+        ]
+        
+        if summary.get('last_execution'):
+            lines.append(f"**Last Execution:** {summary['last_execution'][:19]}")
+        
+        return "\n".join(lines)
+    except Exception as e:
+        return f"❌ Error: {str(e)}"
+
+
+def get_overall_analytics_summary() -> str:
+    """Get overall analytics summary"""
+    try:
+        if not workflow_analytics:
+            return "⚠️ Analytics not initialized"
+        
+        summary = workflow_analytics.get_overall_summary()
+        
+        lines = [
+            "### 📈 Overall Analytics\n",
+            f"**Total Executions:** {summary.get('total_executions', 0)}",
+            f"**Total Workflows:** {summary.get('total_workflows', 0)}",
+            f"**Successful:** {summary.get('successful_executions', 0)}",
+            f"**Failed:** {summary.get('failed_executions', 0)}",
+            f"**Overall Success Rate:** {summary.get('overall_success_rate', 0):.1f}%",
+            f"**Average Duration:** {summary.get('avg_duration', 0):.2f}s",
+            f"**Total Tokens:** {summary.get('total_tokens', 0):,}",
+            f"**Avg Tokens/Execution:** {summary.get('avg_tokens_per_execution', 0):.0f}",
+        ]
+        
+        return "\n".join(lines)
+    except Exception as e:
+        return f"❌ Error: {str(e)}"
+
+
+def get_workflow_execution_history(workflow_name: str, limit: int = 10) -> str:
+    """Get execution history for a workflow"""
+    try:
+        if not workflow_analytics:
+            return "⚠️ Analytics not initialized"
+        
+        if not workflow_name:
+            return "⚠️ Please select a workflow"
+        
+        executions = workflow_analytics.get_workflow_analytics(workflow_name, limit=limit)
+        
+        if not executions:
+            return f"📭 No execution history found for '{workflow_name}'"
+        
+        lines = [f"### 📜 Execution History: {workflow_name}\n"]
+        
+        for exec_data in executions:
+            status = "✅" if exec_data.get('success') else "❌"
+            duration = exec_data.get('total_duration', 0)
+            agents = exec_data.get('total_agents', 0)
+            tokens = exec_data.get('total_tokens', 0)
+            start_time = exec_data.get('start_time', '')[:19] if exec_data.get('start_time') else 'N/A'
+            
+            lines.append(
+                f"{status} **{start_time}** | "
+                f"Duration: {duration:.2f}s | "
+                f"Agents: {agents} | "
+                f"Tokens: {tokens:,}"
+            )
+        
+        return "\n".join(lines)
+    except Exception as e:
+        return f"❌ Error: {str(e)}"
 
 
 def parse_workflow_json(workflow_json_str: str) -> Tuple[str, Dict[str, Any]]:
@@ -1725,6 +1822,58 @@ def build_interface():
                             inputs=[workflow_json_input, workflow_input, workflow_context, workflow_mode],
                             outputs=[workflow_text_output, workflow_html_output]
                         )
+                    
+                    # Analytics Tab
+                    with gr.Tab("📊 Analytics"):
+                        gr.Markdown("### Workflow Execution Analytics")
+                        gr.Markdown("Track performance, metrics, and execution history")
+                        
+                        with gr.Tabs():
+                            with gr.Tab("📈 Overall Summary"):
+                                refresh_overall_btn = gr.Button("🔄 Refresh", size="sm")
+                                overall_analytics = gr.Markdown(get_overall_analytics_summary())
+                                
+                                refresh_overall_btn.click(
+                                    fn=get_overall_analytics_summary,
+                                    outputs=[overall_analytics]
+                                )
+                            
+                            with gr.Tab("📊 Workflow Summary"):
+                                analytics_workflow_selector = gr.Dropdown(
+                                    choices=get_saved_workflow_list(),
+                                    label="Select Workflow",
+                                    interactive=True
+                                )
+                                
+                                refresh_analytics_workflow_btn = gr.Button("🔄 Refresh List", size="sm")
+                                
+                                workflow_analytics_summary = gr.Markdown("")
+                                workflow_execution_history = gr.Markdown("")
+                                
+                                def update_workflow_analytics(workflow_name: str):
+                                    if not workflow_name:
+                                        return "Select a workflow to view analytics", ""
+                                    summary = get_workflow_analytics_summary(workflow_name)
+                                    history = get_workflow_execution_history(workflow_name, limit=10)
+                                    return summary, history
+                                
+                                refresh_analytics_workflow_btn.click(
+                                    fn=lambda: gr.update(choices=get_saved_workflow_list()),
+                                    outputs=[analytics_workflow_selector]
+                                )
+                                
+                                analytics_workflow_selector.change(
+                                    fn=update_workflow_analytics,
+                                    inputs=[analytics_workflow_selector],
+                                    outputs=[workflow_analytics_summary, workflow_execution_history]
+                                )
+                                
+                                refresh_analytics_btn = gr.Button("🔄 Refresh Analytics", variant="primary")
+                                refresh_analytics_btn.click(
+                                    fn=update_workflow_analytics,
+                                    inputs=[analytics_workflow_selector],
+                                    outputs=[workflow_analytics_summary, workflow_execution_history]
+                                )
             
             # ================================================================
             # TAB 7: HISTORY & STATS

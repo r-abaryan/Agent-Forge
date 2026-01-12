@@ -7,6 +7,7 @@ from .orchestration_parser import OrchestrationParser
 from .workflow_executor import WorkflowExecutor
 from .workflow_manager import WorkflowManager
 from .workflow_templates import WorkflowTemplates
+from .workflow_analytics import WorkflowAnalytics
 
 # Try to import workflow_code_generator if it exists
 try:
@@ -17,6 +18,7 @@ try:
         "WorkflowCodeGenerator",
         "WorkflowManager",
         "WorkflowTemplates",
+        "WorkflowAnalytics",
     ]
 except ImportError:
     __all__ = [
@@ -24,6 +26,7 @@ except ImportError:
         "WorkflowExecutor",
         "WorkflowManager",
         "WorkflowTemplates",
+        "WorkflowAnalytics",
     ]
 
 __version__ = "1.0.0"

@@ -135,6 +135,16 @@ class WorkflowExecutor:
         Returns:
             Dictionary with execution results
         """
+        workflow_name = canvas_json.get("name", "Unknown")
+        metrics = None
+        
+        if self.analytics:
+            metrics = self.analytics.start_execution(
+                workflow_name=workflow_name,
+                pass_mode=pass_mode,
+                input_length=len(initial_input) if initial_input else None
+            )
+        
         try:
             # Parse workflow
             parsed_workflow = self.parser.parse_workflow(canvas_json)
@@ -142,19 +152,25 @@ class WorkflowExecutor:
             # Validate workflow
             is_valid, errors = self.parser.validate_workflow(parsed_workflow)
             if not is_valid:
+                error_msg = f"Workflow validation failed: {', '.join(errors)}"
+                if metrics:
+                    self.analytics.finish_execution(metrics, success=False, error_message=error_msg)
                 return {
                     "success": False,
-                    "error": f"Workflow validation failed: {', '.join(errors)}",
-                    "workflow_name": parsed_workflow.get("name", "Unknown")
+                    "error": error_msg,
+                    "workflow_name": workflow_name
                 }
             
             # Get agent sequence
             agent_sequence = parsed_workflow.get("agent_sequence", [])
             if not agent_sequence:
+                error_msg = "No agents found in workflow"
+                if metrics:
+                    self.analytics.finish_execution(metrics, success=False, error_message=error_msg)
                 return {
                     "success": False,
-                    "error": "No agents found in workflow",
-                    "workflow_name": parsed_workflow.get("name", "Unknown")
+                    "error": error_msg,
+                    "workflow_name": workflow_name
                 }
             
             # Ensure all agents exist
@@ -170,13 +186,16 @@ class WorkflowExecutor:
                         else:
                             missing_agents.append(agent_name)
                     else:
-                    missing_agents.append(agent_name)
+                        missing_agents.append(agent_name)
             
             if missing_agents:
+                error_msg = f"Agents not found and could not be created: {', '.join(missing_agents)}"
+                if metrics:
+                    self.analytics.finish_execution(metrics, success=False, error_message=error_msg)
                 return {
                     "success": False,
-                    "error": f"Agents not found and could not be created: {', '.join(missing_agents)}",
-                    "workflow_name": parsed_workflow.get("name", "Unknown")
+                    "error": error_msg,
+                    "workflow_name": workflow_name
                 }
             
             # Execute agents in sequence
@@ -186,18 +205,33 @@ class WorkflowExecutor:
             
             for idx, agent_config in enumerate(agent_sequence):
                 agent_name = agent_config.get("name")
+                agent_start_time = time.time()
                 
                 # Load agent
                 agent = self.agent_manager.load_agent(agent_name, llm=self.llm)
                 if not agent:
-                    results.append({
+                    execution_time = time.time() - agent_start_time
+                    error_msg = f"Error: Could not load agent '{agent_name}'"
+                    result = {
                         "agent": agent_name,
                         "role": agent_config.get("role", "Unknown"),
-                        "response": f"Error: Could not load agent '{agent_name}'",
+                        "response": error_msg,
                         "success": False,
                         "step": idx + 1
-                    })
+                    }
+                    results.append(result)
+                    
+                    if metrics:
+                        self.analytics.record_agent_execution(
+                            metrics=metrics,
+                            agent_name=agent_name,
+                            execution_time=execution_time,
+                            success=False,
+                            error_message=error_msg
+                        )
                     continue
+                
+                # Determine input based on pass mode
                 
                 # Determine input based on pass mode
                 if pass_mode == "cumulative" and idx > 0:
@@ -396,6 +430,7 @@ class WorkflowExecutor:
                 try:
                     result_dict = agent.process(agent_input, context=agent_context_clean)
                     result_dict["step"] = idx + 1
+                    agent_execution_time = time.time() - agent_start_time
                     
                     # Clean response immediately after generation
                     response_raw = result_dict.get('response', '')
@@ -600,38 +635,77 @@ class WorkflowExecutor:
                     
                     results.append(result_dict)
                     
+                    # Record analytics for successful agent execution
+                    if metrics:
+                        self.analytics.record_agent_execution(
+                            metrics=metrics,
+                            agent_name=agent_name,
+                            execution_time=agent_execution_time,
+                            success=result_dict.get("success", False),
+                            tokens_used=None,  # Token tracking would require LLM integration
+                            error_message=None if result_dict.get("success") else result_dict.get("response", "")
+                        )
+                    
                     if result_dict.get("success"):
                         all_outputs.append(f"[{agent_name}]: {result_dict.get('response', '')}")
                 
                 except Exception as e:
-                    results.append({
+                    agent_execution_time = time.time() - agent_start_time
+                    error_msg = f"Error during execution: {str(e)}"
+                    result = {
                         "agent": agent_name,
                         "role": agent_config.get("role", "Unknown"),
-                        "response": f"Error during execution: {str(e)}",
+                        "response": error_msg,
                         "success": False,
                         "step": idx + 1
-                    })
+                    }
+                    results.append(result)
+                    
+                    # Record analytics for failed agent execution
+                    if metrics:
+                        self.analytics.record_agent_execution(
+                            metrics=metrics,
+                            agent_name=agent_name,
+                            execution_time=agent_execution_time,
+                            success=False,
+                            error_message=error_msg
+                        )
             
             # Build final output
             successful_steps = sum(1 for r in results if r.get("success", False))
             final_output = "\n\n".join(all_outputs) if all_outputs else "No successful outputs"
+            workflow_success = successful_steps > 0
+            
+            # Finish analytics tracking
+            if metrics:
+                self.analytics.finish_execution(
+                    metrics=metrics,
+                    success=workflow_success,
+                    output_length=len(final_output) if final_output else None,
+                    error_message=None if workflow_success else "Some agents failed"
+                )
             
             return {
-                "success": successful_steps > 0,
+                "success": workflow_success,
                 "workflow_name": parsed_workflow.get("name", "Unknown"),
                 "workflow_notes": parsed_workflow.get("notes", ""),
                 "total_steps": len(agent_sequence),
                 "successful_steps": successful_steps,
                 "results": results,
                 "final_output": final_output,
-                "metadata": parsed_workflow.get("metadata", {})
+                "metadata": parsed_workflow.get("metadata", {}),
+                "execution_id": metrics.execution_id if metrics else None
             }
             
         except Exception as e:
+            error_msg = f"Workflow execution failed: {str(e)}"
+            if metrics:
+                self.analytics.finish_execution(metrics, success=False, error_message=error_msg)
+            
             return {
                 "success": False,
-                "error": f"Workflow execution failed: {str(e)}",
-                "workflow_name": canvas_json.get("name", "Unknown")
+                "error": error_msg,
+                "workflow_name": workflow_name
             }
     
     def _create_agent_from_config(self, agent_config: Dict[str, Any]) -> Optional[CustomAgent]:
