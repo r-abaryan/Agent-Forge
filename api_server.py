@@ -33,7 +33,6 @@ from src.api_models import (
 from src.api_auth import verify_api_key, api_key_manager
 
 
-# Configuration
 DEFAULT_MODEL = "abaryan/CyberXP_Agent_Llama_3.2_1B"
 
 # Global instances
@@ -148,12 +147,10 @@ async def execute_agent_stream(
 ):
     """Execute agent with streaming response"""
     try:
-        # Load agent
         agent = agent_manager.load_agent(request.agent_name, llm=llm)
         if not agent:
             raise HTTPException(status_code=404, detail=f"Agent '{request.agent_name}' not found")
         
-        # Add RAG context if requested
         context = request.context
         if request.use_rag:
             rag_context = rag_system.get_context_for_query(request.input_text, top_k=3)

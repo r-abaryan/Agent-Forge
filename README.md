@@ -54,4 +54,19 @@ Open `http://localhost:7870` in your browser.
 
 ## Acknowledgments
 
-Built with [Gradio](https://gradio.app/), [LangChain](https://www.langchain.com/), and [Hugging Face Transformers](https://huggingface.co/transformers/). Inspired by the multi-agent architecture of [CyberXP](https://github.com/abaryan/CyberXP).
+Built with [Gradio](https://gradio.app/), [LangChain](https://www.langchain.com/), and [Hugging Face Transformers](https://huggingface.co/transformers/).
+
+
+
+## Citation
+
+If you use this work, please cite:
+
+```bibtex
+@software{CyberXP,
+  title={CyberXP: AI-Powered Cyber Threat Assessment with Multi-Agent Architecture},
+  author={Abaryan},
+  year={2025},
+  url={https://github.com/r-abaryan/CyberLLM-Agent}
+}
+```
