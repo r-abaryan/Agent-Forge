@@ -128,13 +128,18 @@ class AgentManager:
         try:
             for file_path in self.storage_dir.glob("*.json"):
                 try:
-                    with open(file_path, 'r', encoding='utf-8') as f:
-                        agent_data = json.load(f)
-                    
+                    safe_name = file_path.stem
+                    if safe_name in self._agent_data_cache:
+                        agent_data = self._agent_data_cache[safe_name]
+                    else:
+                        with open(file_path, 'r', encoding='utf-8') as f:
+                            agent_data = json.load(f)
+                        self._agent_data_cache[safe_name] = agent_data
+
                     agents.append({
                         "name": agent_data.get("name", "Unknown"),
                         "role": agent_data.get("role", "No role specified"),
-                        "filename": file_path.stem
+                        "filename": safe_name
                     })
                 except Exception as e:
                     logger.error(f"Error reading {file_path.name}: {e}")
