@@ -11,6 +11,27 @@ import re
 _URL_PATTERN = re.compile(r'https?://[^\s]+')
 _CODE_BLOCK_PATTERN = re.compile(r'```[\w]*\n.*?```|```.*?```', re.DOTALL | re.MULTILINE)
 
+_PROMPT_PATTERNS_TO_REMOVE = [
+    r'Data source:.*?(?=\n|$)',
+    r'Strategy:.*?(?=\n|$)',
+    r'Output format:.*?(?=\n|$)',
+    r'Output types:.*?(?=\n|$)',
+    r'Focus on:.*?(?=\n|$)',
+    r'Route:.*?(?=\n|$)',
+    r'Dates:.*?(?=\n|$)',
+    r'IMPORTANT:.*?(?=\n\n|\n[A-Z]|$)',
+    r'Your response should.*?(?=\n\n|\n[A-Z]|$)',
+    r'Do NOT include.*?(?=\n\n|\n[A-Z]|$)',
+    r'Be direct.*?(?=\n|$)',
+    r'Context:.*?(?=\n\n|$)',
+    r'## Previous Results:.*?(?=\n\n|$)',
+    r'\[.*?Agent\]:\s*',
+    r'Human:.*?(?=\n|$)',
+    r'\*\*Role:\*\*.*?(?=\n|$)',
+    r'Role:.*?(?=\n|$)',
+    r'^- .*?(?:focused on|Using|Checking|Adapting|Encouraging|Providing).*?$',
+]
+
 
 class CustomAgent(BaseAgent):
     """
@@ -176,91 +197,30 @@ Your role: {self.role}
                 if len(lines) > 1:
                     response_clean = lines[1].strip()
             
-            # AGGRESSIVE CLEANING: Remove ALL guidelines, metadata, system prompts, and code blocks
-            # Remove URLs first (they're often repetitive and long) - use pre-compiled pattern
+            # Aggressive cleaning: remove guidelines, metadata, system prompts, and code blocks
             response_clean = _URL_PATTERN.sub('', response_clean)
-            
-            # Remove code blocks - use pre-compiled pattern
             response_clean = _CODE_BLOCK_PATTERN.sub('', response_clean)
-            
-            patterns_to_remove = [
-                r'Data source:.*?(?=\n|$)',
-                r'Strategy:.*?(?=\n|$)',
-                r'Output format:.*?(?=\n|$)',
-                r'Output types:.*?(?=\n|$)',
-                r'Focus on:.*?(?=\n|$)',
-                r'Route:.*?(?=\n|$)',
-                r'Dates:.*?(?=\n|$)',
-                r'IMPORTANT:.*?(?=\n\n|\n[A-Z]|$)',
-                r'Your response should.*?(?=\n\n|\n[A-Z]|$)',
-                r'Do NOT include.*?(?=\n\n|\n[A-Z]|$)',
-                r'Be direct.*?(?=\n|$)',
-                r'Context:.*?(?=\n\n|$)',
-                r'## Previous Results:.*?(?=\n\n|$)',
-                r'\[.*?Agent\]:\s*',
-                r'Human:.*?(?=\n|$)',
-                r'\*\*Role:\*\*.*?(?=\n|$)',
-                r'Role:.*?(?=\n|$)',
-                r'^- .*?(?:focused on|Using|Checking|Adapting|Encouraging|Providing).*?$',
-            ]
-            for pattern in patterns_to_remove:
+
+            for pattern in _PROMPT_PATTERNS_TO_REMOVE:
                 response_clean = re.sub(pattern, '', response_clean, flags=re.IGNORECASE | re.DOTALL | re.MULTILINE)
             
-            # Remove lines that are just metadata/guidelines or code
             lines = response_clean.split('\n')
             filtered_lines = []
-            skip_patterns = [
-                r'^Data source',
-                r'^Strategy',
-                r'^Output format',
-                r'^Output types',
-                r'^Focus on',
-                r'^Route:',
-                r'^Dates:',
-                r'^IMPORTANT:',
-                r'^Your response',
-                r'^Do NOT',
-                r'^Be direct',
-                r'^Context:',
-                r'^Human:',
-                r'^## Previous',
-                r'^\*\*Role:',
-                r'^Role:',
-                r'^- .*?(?:Breaking down|Using|Checking|Adapting|Encouraging|Providing)',
-                r'^- .*?(?:focused on|clear explanations)',
-                r'^Explain concepts',
-            ]
-            # Patterns to detect code lines
-            code_line_patterns = [
-                r'^import\s+',
-                r'^from\s+\w+\s+import',
-                r'^def\s+\w+\s*\(',
-                r'^class\s+\w+',
-                r'^\s*[a-zA-Z_][a-zA-Z0-9_]*\s*=\s*[^=]',  # Variable assignment
-                r'^\s*print\s*\(',
-                r'^\s*return\s+',
-                r'^\s*if\s+.*:',
-                r'^\s*for\s+.*:',
-                r'^\s*while\s+.*:',
-                r'^\s*#.*',  # Comments
-            ]
-            
+
             for line in lines:
                 line_stripped = line.strip()
                 if not line_stripped:
                     filtered_lines.append(line)
                     continue
                 
-                # Skip if line matches skip patterns
                 should_skip = False
-                for pattern in skip_patterns:
+                for pattern in _PROMPT_SKIP_LINE_PATTERNS:
                     if re.match(pattern, line_stripped, re.IGNORECASE):
                         should_skip = True
                         break
                 
-                # Skip if line looks like code
                 if not should_skip:
-                    for code_pattern in code_line_patterns:
+                    for code_pattern in _PROMPT_CODE_LINE_PATTERNS:
                         if re.match(code_pattern, line_stripped):
                             should_skip = True
                             break
