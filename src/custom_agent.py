@@ -32,6 +32,42 @@ _PROMPT_PATTERNS_TO_REMOVE = [
     r'^- .*?(?:focused on|Using|Checking|Adapting|Encouraging|Providing).*?$',
 ]
 
+_PROMPT_SKIP_LINE_PATTERNS = [
+    r'^Data source',
+    r'^Strategy',
+    r'^Output format',
+    r'^Output types',
+    r'^Focus on',
+    r'^Route:',
+    r'^Dates:',
+    r'^IMPORTANT:',
+    r'^Your response',
+    r'^Do NOT',
+    r'^Be direct',
+    r'^Context:',
+    r'^Human:',
+    r'^## Previous',
+    r'^\*\*Role:',
+    r'^Role:',
+    r'^- .*?(?:Breaking down|Using|Checking|Adapting|Encouraging|Providing)',
+    r'^- .*?(?:focused on|clear explanations)',
+    r'^Explain concepts',
+]
+
+_PROMPT_CODE_LINE_PATTERNS = [
+    r'^import\s+',
+    r'^from\s+\w+\s+import',
+    r'^def\s+\w+\s*\(',
+    r'^class\s+\w+',
+    r'^\s*[a-zA-Z_][a-zA-Z0-9_]*\s*=\s*[^=]',
+    r'^\s*print\s*\(',
+    r'^\s*return\s+',
+    r'^\s*if\s+.*:',
+    r'^\s*for\s+.*:',
+    r'^\s*while\s+.*:',
+    r'^\s*#.*',
+]
+
 
 class CustomAgent(BaseAgent):
     """
