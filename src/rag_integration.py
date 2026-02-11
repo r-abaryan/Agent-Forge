@@ -12,7 +12,7 @@ from .logger_config import get_logger
 logger = get_logger("agentforge.rag")
 
 try:
-    from src.vector_store import VectorStoreManager
+    from vector_store.vector_store import VectorStoreManager
     VECTOR_SEARCH_AVAILABLE = True
 except ImportError:
     VECTOR_SEARCH_AVAILABLE = False
